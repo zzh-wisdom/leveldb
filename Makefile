@@ -6,9 +6,11 @@ build:
 	cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 
 INSTALL_PATH := /usr/local
-INCLUDE_DIR := #leveldb
+INCLUDE_DIR := #leveldb # 由于代码中的头文件都放在include/leveldb目录下，因此这里不需要另外指明为leveldb
 LIBRARY_DIR := build
 LIBRARY := libleveldb.a
+
+install:install-static-lib
 
 install-headers:
 	install -d $(INSTALL_PATH)/lib
@@ -20,11 +22,9 @@ install-headers:
 		install -C -m 644 include/$$header $(INSTALL_PATH)/include/$(INCLUDE_DIR)/$$header; \
 	done
 
-install-static: install-headers 
+install-static-lib: install-headers 
 	install -C -m 755 $(LIBRARY_DIR)/$(LIBRARY) $(INSTALL_PATH)/lib
 
-install:install-static
-
 uninstall:
-	rm -rf $(INSTALL_PATH)/include/$(INCLUDE_DIR) \
+	rm -rf $(INSTALL_PATH)/include/$(INCLUDE_DIR)/leveldb \
 	$(INSTALL_PATH)/lib/$(LIBRARY)

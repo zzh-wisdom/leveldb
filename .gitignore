@@ -1,8 +1,13 @@
 # Editors.
 *.sw*
 .vscode
+.vs
 .DS_Store
 
 # Build directory.
 build/
 out/
+bin/
+
+# Other Directory.
+tmp

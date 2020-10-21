@@ -6,21 +6,23 @@
 using namespace std;
 
 int main(){
-    leveldb::DB* db; 
+    leveldb::DB* db;
     leveldb::Options options;
     options.create_if_missing = true;
-    //打开一个数据库
-    leveldb::Status status = leveldb::DB::Open(options,"./testdb1",&db);
+    leveldb::Status status = leveldb::DB::Open(options, "/tmp/testdb", &db);
+    cout << status.ToString() << endl;
+    assert(status.ok());
     int count = 0;
 
     //循环多次，不断添加内容
-    while (count < 1000) {
+    while (count < 10) {
         std::stringstream keys ;
         std::string key;
-        std::string value = "shuningzhang@itworld123.com";
+        std::string value = "I'm fine.";
 
-        keys << "itworld123-" << count;
+        keys << "How are you?" << count;
         key = keys.str();
+        //if (s.ok()) s = db->Put(leveldb::WriteOptions(), key2, value);
         status = db->Put(leveldb::WriteOptions(), key, value);//添加内容
         assert(status.ok());
 
