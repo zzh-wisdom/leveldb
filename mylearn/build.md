@@ -6,24 +6,37 @@
 
 ### 编译
 
-获取代码：
-git clone --recurse-submodules https://github.com/google/leveldb.git
-注意一定要--recurse-submodules选项，用于将子模块拷贝下来
-如果忘了，可以用下列命令进行补救
-git submodule update --init --recursive
+- 依赖安装：
 
-mkdir -p build && cd build
-
-依赖安装：
+```shell
 sudo apt-get install build-essential   #GCC
 sudo apt install cmake #cmake
+```
 
-编译：
+- 获取代码：
+
+```shell
+git clone --recurse-submodules https://github.com/google/leveldb.git
+```
+
+> 注意一定要--recurse-submodules选项，用于将子模块拷贝下来
+> 如果忘了，可以用下列命令进行补救
+> ```
+> git submodule update --init --recursive
+> ```
+
+- 编译：
+
+```shell
+mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
+```
 
 完成上述几步，就可以在build目录下，编译出一个静态库、一个动态库和一些测试程序。我们可以自己写一个测试代码进行测试。
 
 ### 使用
+
+> 
 
 创建一个test目录， 然后将静态库libleveldb.a拷贝进来。
 
@@ -83,7 +96,7 @@ int main(){
 
 ```shell
 g++ -o test test.cpp libleveldb.a -lpthread -I../include
-
+./test
 ```
 
 
