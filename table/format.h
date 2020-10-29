@@ -45,11 +45,27 @@ class BlockHandle {
 
 // Footer encapsulates the fixed information stored at the tail
 // end of every table file.
+/**
+ * @brief 页脚Footer封装了存储在每个表文件末尾的固定信息。
+ * 
+ * 一个48个字节：
+ *  - Index Block                          —— 16 bytes
+ *  - MetaIndex Block                      —— 16 bytes
+ *  - Padding填充                          —— 8 bytes
+ *  - magic number： 固定值，标识SSTable   —— 8 bytes
+ * 
+ */
 class Footer {
  public:
-  // Encoded length of a Footer.  Note that the serialization of a
-  // Footer will always occupy exactly this many bytes.  It consists
-  // of two block handles and a magic number.
+  /**
+   * 页脚的编码长度。48
+   * 请注意，页脚的序列化将始终恰好占据这么多字节。
+   * 它由两个块句柄和一个幻数(magic number)组成。
+   * 
+   */
+  /// Encoded length of a Footer.  Note that the serialization of a
+  /// Footer will always occupy exactly this many bytes.  It consists
+  /// of two block handles and a magic number.
   enum { kEncodedLength = 2 * BlockHandle::kMaxEncodedLength + 8 };
 
   Footer() = default;

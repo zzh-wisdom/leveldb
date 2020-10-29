@@ -77,8 +77,9 @@ class Limiter {
   Limiter(const Limiter&) = delete;
   Limiter operator=(const Limiter&) = delete;
 
-  // If another resource is available, acquire it and return true.
-  // Else return false.
+  /// If another resource is available, acquire it and return true.
+  /// Else return false.
+  /// 应该是用来判断系统是否具有足够多的资源来永久持有fd
   bool Acquire() {
     int old_acquires_allowed =
         acquires_allowed_.fetch_sub(1, std::memory_order_relaxed);
@@ -147,13 +148,13 @@ class PosixSequentialFile final : public SequentialFile {
 // functions.
 class PosixRandomAccessFile final : public RandomAccessFile {
  public:
-  // The new instance takes ownership of |fd|. |fd_limiter| must outlive this
-  // instance, and will be used to determine if .
+  /// The new instance takes ownership of |fd|. |fd_limiter| must outlive this
+  /// instance, and will be used to determine if .
   PosixRandomAccessFile(std::string filename, int fd, Limiter* fd_limiter)
       : has_permanent_fd_(fd_limiter->Acquire()),
         fd_(has_permanent_fd_ ? fd : -1),
         fd_limiter_(fd_limiter),
-        filename_(std::move(filename)) {
+        filename_(std::move(filename)) {   /// \todo std::move 函数的用法
     if (!has_permanent_fd_) {
       assert(fd_ == -1);
       ::close(fd);  // The file will be opened on every read.
@@ -509,6 +510,17 @@ class PosixEnv : public Env {
     return Status::OK();
   }
 
+  /**
+   * @brief 创建RandomAccessFile——随机访问文件
+   * 
+   * 有以下两个访问模式：
+   * 1. （资源不足的情况下）随机访问，每访问一次都需要打开一次文件，读取完后关闭
+   * 2. 资源充足的情况下，则使用mmap的方式访问文件
+   * 
+   * @param filename 
+   * @param result 
+   * @return Status 
+   */
   Status NewRandomAccessFile(const std::string& filename,
                              RandomAccessFile** result) override {
     *result = nullptr;

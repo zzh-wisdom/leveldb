@@ -84,6 +84,16 @@ Version::~Version() {
   }
 }
 
+/**
+ * @brief 根据largest key来进行二分查找
+ * 
+ * 所以后续还需要对smallest key进行判断
+ * 
+ * @param icmp 
+ * @param files 
+ * @param key 
+ * @return int 
+ */
 int FindFile(const InternalKeyComparator& icmp,
              const std::vector<FileMetaData*>& files, const Slice& key) {
   uint32_t left = 0;
@@ -259,6 +269,7 @@ struct Saver {
   std::string* value;
 };
 }  // namespace
+
 static void SaveValue(void* arg, const Slice& ikey, const Slice& v) {
   Saver* s = reinterpret_cast<Saver*>(arg);
   ParsedInternalKey parsed_key;
@@ -279,7 +290,10 @@ static bool NewestFirst(FileMetaData* a, FileMetaData* b) {
 }
 
 /**
- * @brief 
+ * @brief 逐层（SSTable）查找key
+ * 
+ * 1. 查找L0层，从新到旧的顺序进行查找，如果找到则直接返回
+ * 2. 查找其他level，因为是有序的，所以采用二分查找
  * 
  * @param user_key 
  * @param internal_key 
@@ -292,7 +306,9 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
 
   // Search level-0 in order from newest to oldest.
   std::vector<FileMetaData*> tmp;
+  // 将容器的容量cap提升
   tmp.reserve(files_[0].size());
+  // 将L0层中，key范围包含目标key的SSTable加入到tmp容器中
   for (uint32_t i = 0; i < files_[0].size(); i++) {
     FileMetaData* f = files_[0][i];
     if (ucmp->Compare(user_key, f->smallest.user_key()) >= 0 &&
@@ -353,11 +369,23 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
 
     VersionSet* vset;
     Status s;
-    bool found;
+    bool found; // ?
 
+    /**
+     * @brief 在FileMetaData中进行查找
+     * 
+     * 先在cache中查找
+     * 
+     * @param arg 
+     * @param level 
+     * @param f 
+     * @return true  意味着需要继续查找其他文件
+     * @return false 查找成功
+     */
     static bool Match(void* arg, int level, FileMetaData* f) {
       State* state = reinterpret_cast<State*>(arg);
-
+      
+      // 用来存储上一次的last_file_read和last_file_read_level？
       if (state->stats->seek_file == nullptr &&
           state->last_file_read != nullptr) {
         // We have had more than one seek for this read.  Charge the 1st file.
@@ -371,7 +399,7 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
       state->s = state->vset->table_cache_->Get(*state->options, f->number,
                                                 f->file_size, state->ikey,
                                                 &state->saver, SaveValue);
-      if (!state->s.ok()) {
+      if (!state->s.ok()) { /// \todo 这种情况为什么将found置为true
         state->found = true;
         return false;
       }

@@ -179,6 +179,19 @@ inline int InternalKeyComparator::Compare(const InternalKey& a,
   return Compare(a.Encode(), b.Encode());
 }
 
+/**
+ * @brief 解码内部key
+ * 
+ * 解码结果包括：
+ *  - sequence
+ *  - type（ValueType）
+ *  - user_key（Slice）
+ * 
+ * @param[in] internal_key 
+ * @param[out] result
+ * @return true  解码出来的kTypeValue有效（小于等于1）
+ * @return false 
+ */
 inline bool ParseInternalKey(const Slice& internal_key,
                              ParsedInternalKey* result) {
   const size_t n = internal_key.size();

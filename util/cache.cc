@@ -103,15 +103,25 @@ class HandleTable {
   }
 
  private:
-  // The table consists of an array of buckets where each bucket is
-  // a linked list of cache entries that hash into the bucket.
-  uint32_t length_;
+  /// The table consists of an array of buckets where each bucket is
+  /// a linked list of cache entries that hash into the bucket.
+  uint32_t length_;   /// \todo length_ 的含义有待探究
   uint32_t elems_;
-  LRUHandle** list_;
+  LRUHandle** list_;   /// 数组链表
 
   // Return a pointer to slot that points to a cache entry that
   // matches key/hash.  If there is no such cache entry, return a
   // pointer to the trailing slot in the corresponding linked list.
+  /**
+   * @brief 寻找插槽
+   * 
+   * 返回指向插槽的指针，该插槽指向与key/hash匹配的缓存条目。 
+   * 如果没有这样的缓存条目，则返回指向相应链表中尾随插槽的指针。
+   * 
+   * @param key 
+   * @param hash 
+   * @return LRUHandle** 
+   */
   LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = &list_[hash & (length_ - 1)];
     while (*ptr != nullptr && ((*ptr)->hash != hash || key != (*ptr)->key())) {
@@ -179,7 +189,7 @@ class LRUCache {
   // Initialized before use.
   size_t capacity_;
 
-  // mutex_ protects the following state.
+  /// mutex_ protects the following state.
   mutable port::Mutex mutex_;
   size_t usage_ GUARDED_BY(mutex_);
 
@@ -338,14 +348,28 @@ static const int kNumShards = 1 << kNumShardBits;
 
 class ShardedLRUCache : public Cache {
  private:
-  LRUCache shard_[kNumShards];
+  LRUCache shard_[kNumShards];  // 相当于“桶”
   port::Mutex id_mutex_;
   uint64_t last_id_;
 
+  /**
+   * @brief 根据切片Slice生成hash值
+   * 
+   * @param s 
+   * @return uint32_t 
+   */
   static inline uint32_t HashSlice(const Slice& s) {
     return Hash(s.data(), s.size(), 0);
   }
 
+  /**
+   * @brief 根据hash值得到“桶”的值
+   * 
+   * hash >> (32 - kNumShardBits)
+   * 
+   * @param hash 
+   * @return uint32_t 
+   */
   static uint32_t Shard(uint32_t hash) { return hash >> (32 - kNumShardBits); }
 
  public:
@@ -361,6 +385,12 @@ class ShardedLRUCache : public Cache {
     const uint32_t hash = HashSlice(key);
     return shard_[Shard(hash)].Insert(key, hash, value, charge, deleter);
   }
+  /**
+   * @brief 
+   * 
+   * @param key 
+   * @return Handle* 
+   */
   Handle* Lookup(const Slice& key) override {
     const uint32_t hash = HashSlice(key);
     return shard_[Shard(hash)].Lookup(key, hash);
