@@ -20,8 +20,10 @@ Comparator::~Comparator() = default;
 namespace {
 class BytewiseComparatorImpl : public Comparator {
  public:
+  /// \todo BytewiseComparatorImpl() = default 中 default 的作用
   BytewiseComparatorImpl() = default;
 
+  /// \todo const char* Name() const override 中 const 的作用
   const char* Name() const override { return "leveldb.BytewiseComparator"; }
 
   int Compare(const Slice& a, const Slice& b) const override {

@@ -1,6 +1,6 @@
-CC := gcc
-CXX := g++
-CFLAGS := -lleveldb -lpthread -g  # -g选项用于调试
+CC := gcc -std=c++11
+CXX := g++ -std=c++11
+CFLAGS := -lleveldb -lpthread -lsnappy -g  # -g选项用于调试
 
 DIR_BIN := bin
 
@@ -37,4 +37,4 @@ doc:
 	doxygen Doxyfile
 
 clean:
-	rm -f *.o bin/* *.d
+	rm -rf *.o bin/* *.d tmp/*

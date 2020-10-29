@@ -91,6 +91,17 @@ static void ClipToRange(T* ptr, V minvalue, V maxvalue) {
   if (static_cast<V>(*ptr) > maxvalue) *ptr = maxvalue;
   if (static_cast<V>(*ptr) < minvalue) *ptr = minvalue;
 }
+/**
+ * @brief SanitizeOptions
+ * 
+ * 根据传入的 icmp 和 ipolicy 重新构造子类，再赋回 src 的对应成员
+ * 
+ * @param dbname 
+ * @param icmp 
+ * @param ipolicy 
+ * @param src 
+ * @return Options 
+ */
 Options SanitizeOptions(const std::string& dbname,
                         const InternalKeyComparator* icmp,
                         const InternalFilterPolicy* ipolicy,
@@ -1107,6 +1118,24 @@ int64_t DBImpl::TEST_MaxNextLevelOverlappingBytes() {
   return versions_->MaxNextLevelOverlappingBytes();
 }
 
+/**
+ * @brief 读操作
+ * 
+ * 读操作基于user_key可以找到当前最大SequenceNumber的数据，也支持获取指定快照的数据。
+ * 
+ * 1. 如果ReadOption指定了snapshot，则将snapshot的Sequence Number作为最大的Sequence Number，
+ *    否则，将当前最大的Sequence Number(ersions_->LastSequence())作为最大的Sequence Number。
+ * 2. 在memtable中查找(Memtable::Get())。
+ * 3. 如果在memtable中未找到，并且存在immutable memtable，就在immutable memtable中查找(Memtable::Get())。
+ * 4. 如果(3)仍未找到，在sstable中查找(VersionSet::Get())，从L0开始，每个level上依次查找，一旦找到，即返回。
+ * 
+ * <div align=center><img src="../images/DBImpl-Get示意图.png" height="50%" width="50%"/></div>
+ * 
+ * @param options 
+ * @param key 
+ * @param value 
+ * @return Status 
+ */
 Status DBImpl::Get(const ReadOptions& options, const Slice& key,
                    std::string* value) {
   Status s;
@@ -1183,7 +1212,16 @@ void DBImpl::ReleaseSnapshot(const Snapshot* snapshot) {
   snapshots_.Delete(static_cast<const SnapshotImpl*>(snapshot));
 }
 
-// Convenience methods
+/**
+ * @brief Convenience methods.
+ * 
+ * 直接调用 DB::Put 函数。
+ * 
+ * @param o 
+ * @param key 
+ * @param val 
+ * @return Status 
+ */
 Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
   return DB::Put(o, key, val);
 }
@@ -1192,13 +1230,34 @@ Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
   return DB::Delete(options, key);
 }
 
+/**
+ * @brief Write
+ * 
+ * 1. 构造读写请求，放到写请求队列中
+ * 2. 不断等待，直到（while判断）该请求已被处理（直接返回）或者处于队列的头部
+ * 3. 可能暂时解锁并等待（DBImpl::MakeRoomForWrite()）
+ * 4. 设置WriteBatch的SequenceNumber, 更新 last_sequence += WriteBatchInternal::Count(write_batch);
+ * 5. 先将WriteBatch中的数据写入log(Log::AddRecord())，根据需要，还需sync
+ * 6. 然后将WriteBatch的数据写入memetable
+ * 7. 更新版本 versions_->SetLastSequence(last_sequence);
+ * 8. 将处理好的请求从队列中去除，并发信号唤醒那些在等待的线程（且它们的请求已经处理好）
+ * 9. 还要唤醒此时处于队列头部的请求
+ * 
+ * @param options 
+ * @param updates 
+ * @return Status 
+ */
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   Writer w(&mutex_);
   w.batch = updates;
   w.sync = options.sync;
   w.done = false;
 
-  MutexLock l(&mutex_);
+  /**
+   * 这里隐含加锁，使用这个类，应该是为了防止忘记解锁。
+   * 因为， MutexLock 类在析构时会自动解锁
+   */
+  MutexLock l(&mutex_); // 
   writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
     w.cv.Wait();
@@ -1220,6 +1279,10 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // during this phase since &w is currently responsible for logging
     // and protects against concurrent loggers and concurrent writes
     // into mem_.
+    /**
+     * 添加到日志并应用于memtable。我们可以在此阶段释放锁定，
+     * 因为此时，＆w负责和防止日志并发记录和并发写入mem_。
+     */
     {
       mutex_.Unlock();
       status = log_->AddRecord(WriteBatchInternal::Contents(write_batch));
@@ -1249,7 +1312,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   while (true) {
     Writer* ready = writers_.front();
     writers_.pop_front();
-    if (ready != &w) {
+    if (ready != &w) { // 当前的请求已经在处理，不需要发信号唤醒
       ready->status = status;
       ready->done = true;
       ready->cv.Signal();
@@ -1265,8 +1328,27 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
   return status;
 }
 
-// REQUIRES: Writer list must be non-empty
-// REQUIRES: First writer must have a non-null batch
+
+/**
+ * @brief BuildBatchGroup 打包多个请求，一起处理
+ * 
+ * 将队列头部的写请求取出。\n
+ * 如果后续请求的 sync 类型满足，则一起处理成batch。\n
+ * batch的条件是：不能将 sync 的请求和 non-sync 的请求一起处理。\n
+ * batch的大小有限制，原则是，小请求不能batch太大
+ * ```cpp
+ * size_t max_size = 1 << 20;
+ * if (size <= (128 << 10)) {
+ *    max_size = size + (128 << 10);
+ * }
+ * ```
+ * 
+ * \pre
+ * REQUIRES: Writer list must be non-empty\n
+ * REQUIRES: First writer must have a non-null batch
+ * 
+ * @param[out] 返回最后处理的写请求
+ */
 WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
@@ -1304,6 +1386,7 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
       // Append to *result
       if (result == first->batch) {
         // Switch to temporary batch instead of disturbing caller's batch
+        // 以防修改请求的batch数据
         result = tmp_batch_;
         assert(WriteBatchInternal::Count(result) == 0);
         WriteBatchInternal::Append(result, first->batch);
@@ -1315,8 +1398,21 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   return result;
 }
 
-// REQUIRES: mutex_ is held
-// REQUIRES: this thread is currently at the front of the writer queue
+/**
+ * @brief MakeRoomForWrite 延迟写，以留空间给内部操作
+ * 
+ * 1. 如果当前L0层的文件数目达到了kL0_SlowdownWritesTrigger(8)阈值，则会延迟1ms写入，该延迟只发生一次
+ *    > 我们即将达到对L0文件数量的严格限制。当我们达到硬限制时，与其将单个写入延迟几秒钟，
+ *    > 不如将每个单独写入延迟1ms以减少延迟差异。同样，如果它与写程序共享同一内核，则此延迟会将一些CPU移交给压缩线程。
+ * 2. 如果当前memtable的size未达到阈值write_buffer_size(默认4MB)，则允许写入
+ * 3. 如果memtable的size已经达到阈值，但immutable memtable仍然存在，则等待compaction将其dump完成；
+ * 4. 如果L0文件数目达到了kL0_StopWritesTrigger(12)，则等待compaction memtable完成
+ * 5. \b 上述条件都不满足， 则memtable已经写满，并且immutable memtable不存在，
+ *    则将当前memetable置成immutable memtable，产生新的memtable和log file，主动触发compaction，允许该次写(下一次循环跳出)。
+ * 
+ * \pre REQUIRES: mutex_ is held
+ * \pre REQUIRES: this thread is currently at the front of the writer queue
+ */
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
@@ -1459,8 +1555,12 @@ void DBImpl::GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
   v->Unref();
 }
 
-// Default implementations of convenience methods that subclasses of DB
-// can call if they wish
+/**
+ * @details 
+ * Default implementations of convenience methods that subclasses of DB
+ * can call if they wish.
+ * DB子类可以根据需要调用的便捷方法的默认实现
+ */
 Status DB::Put(const WriteOptions& opt, const Slice& key, const Slice& value) {
   WriteBatch batch;
   batch.Put(key, value);
@@ -1473,8 +1573,17 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
   return Write(opt, &batch);
 }
 
+/**
+ * \todo 了解default的用法
+ */
 DB::~DB() = default;
 
+/**
+ * \details 
+ * 1.创建DBImpl
+ * 2.Recover 创建文件夹或者恢复数据
+ * 3.。。。
+ */
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   *dbptr = nullptr;
 

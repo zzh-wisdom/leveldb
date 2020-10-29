@@ -51,13 +51,22 @@ class InternalKey;
 // Value types encoded as the last component of internal keys.
 // DO NOT CHANGE THESE ENUM VALUES: they are embedded in the on-disk
 // data structures.
+/**
+ * @brief 值类型编码
+ * 值类型, 编码为内部键的最后一个组成部分。不要更改这些枚举值：它们嵌入在磁盘数据结构中。
+ */
 enum ValueType { kTypeDeletion = 0x0, kTypeValue = 0x1 };
-// kValueTypeForSeek defines the ValueType that should be passed when
-// constructing a ParsedInternalKey object for seeking to a particular
-// sequence number (since we sort sequence numbers in decreasing order
-// and the value type is embedded as the low 8 bits in the sequence
-// number in internal keys, we need to use the highest-numbered
-// ValueType, not the lowest).
+/// kValueTypeForSeek defines the ValueType that should be passed when
+/// constructing a ParsedInternalKey object for seeking to a particular
+/// sequence number (since we sort sequence numbers in decreasing order
+/// and the value type is embedded as the low 8 bits in the sequence
+/// number in internal keys, we need to use the highest-numbered
+/// ValueType, not the lowest).
+/**
+ * @brief kValueTypeForSeek定义了构造ParsedInternalKey对象以查找特定序列号时应传递的ValueType
+ * （由于我们按降序对序列号进行排序，并且值类型被嵌入为内部键中序列号的低8位，
+ * 因此我们需要以使用编号最高的ValueType，而不是最低的）。
+ */
 static const ValueType kValueTypeForSeek = kTypeValue;
 
 typedef uint64_t SequenceNumber;
@@ -128,9 +137,11 @@ class InternalFilterPolicy : public FilterPolicy {
   bool KeyMayMatch(const Slice& key, const Slice& filter) const override;
 };
 
-// Modules in this directory should keep internal keys wrapped inside
-// the following class instead of plain strings so that we do not
-// incorrectly use string comparisons instead of an InternalKeyComparator.
+/// Modules in this directory should keep internal keys wrapped inside
+/// the following class instead of plain strings so that we do not
+/// incorrectly use string comparisons instead of an InternalKeyComparator.
+/// 此目录中的模块应将内部键包装在以下类中，而不是普通字符串。这样就不会错误使用比较函数
+/// InternalKey 的结构： Key + tag(Sequence number｜ kTypeValue)
 class InternalKey {
  private:
   std::string rep_;
@@ -202,13 +213,13 @@ class LookupKey {
   Slice user_key() const { return Slice(kstart_, end_ - kstart_ - 8); }
 
  private:
-  // We construct a char array of the form:
-  //    klength  varint32               <-- start_
-  //    userkey  char[klength]          <-- kstart_
-  //    tag      uint64
-  //                                    <-- end_
-  // The array is a suitable MemTable key.
-  // The suffix starting with "userkey" can be used as an InternalKey.
+  /// We construct a char array of the form:
+  ///    klength  varint32               <-- start_
+  ///    userkey  char[klength]          <-- kstart_
+  ///    tag      uint64
+  ///                                    <-- end_
+  /// The array is a suitable MemTable key.
+  /// The suffix starting with "userkey" can be used as an InternalKey.
   const char* start_;
   const char* kstart_;
   const char* end_;

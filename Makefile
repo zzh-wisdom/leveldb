@@ -1,8 +1,8 @@
-
+.PHONY: all build doc
 all: build install
 
 build:
-	mkdir -p build && cd build
+	mkdir -p build && cd build && \
 	cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build .
 
 INSTALL_PATH := /usr/local
@@ -28,3 +28,13 @@ install-static-lib: install-headers
 uninstall:
 	rm -rf $(INSTALL_PATH)/include/$(INCLUDE_DIR)/leveldb \
 	$(INSTALL_PATH)/lib/$(LIBRARY)
+
+format:
+	@#for f in $(shell find . -name '*.c' -or -name '*.cpp' -or -name '*.h' -type f); do astyle $$f; done
+	astyle --recursive *.h,*.c,*.cpp
+
+doc:
+	doxygen Doxyfile
+
+clean:
+	rm -f *.o bin/* *.d

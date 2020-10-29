@@ -9,6 +9,14 @@
 
 #include "leveldb/export.h"
 
+/**
+ * @file options.h
+ * 
+ * @brief 操作选项.
+ * 
+ * Description.
+ */
+
 namespace leveldb {
 
 class Cache;

@@ -9,5 +9,9 @@ build/
 out/
 bin/
 
+#docx
+html
+
+
 # Other Directory.
 tmp

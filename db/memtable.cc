@@ -73,6 +73,29 @@ class MemTableIterator : public Iterator {
 
 Iterator* MemTable::NewIterator() { return new MemTableIterator(&table_); }
 
+/**
+ * @brief add data to MemTable
+ * 
+ * entry组成：
+ *   * klength  varint32      包括userkey和tag的长度，即ukey_size + 8
+ *   * userkey  char[klength]
+ *   * tag      uint64   最低一个字节是 ValueType ，高7个字节是 SequenceNumber
+ *   * vlength  varint32
+ *   * value    char[vlength]
+ * 
+ *  <div align=center><img src="../images/key-value-in-memtable.png" height="50%" width="50%"/></div>
+ * > **参考：**\n
+ * >        <https://zhuanlan.zhihu.com/p/51360281>
+ * 
+ * 插入读取都涉及到key的比较，LevelDB提供了默认的实现Comparator,Comparator是一个接口，
+ * 用户也可以自定义比较函数。LevelDB实现了两个Comparator: BytewiseComparatorImpl和InternalKeyComparator。
+ * BytewiseComparatorImpl实现了字节序比较，InternalKeyComparator封装了一层Comparator，当key相等时，还会比较SequenceNumber。
+ * 
+ * @param s 
+ * @param type 
+ * @param key 
+ * @param value 
+ */
 void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
                    const Slice& value) {
   // Format of an entry is concatenation of:
@@ -82,7 +105,7 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   //  value bytes  : char[value.size()]
   size_t key_size = key.size();
   size_t val_size = value.size();
-  size_t internal_key_size = key_size + 8;
+  size_t internal_key_size = key_size + 8; // 将序列号加进去？
   const size_t encoded_len = VarintLength(internal_key_size) +
                              internal_key_size + VarintLength(val_size) +
                              val_size;
@@ -98,20 +121,33 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
   table_.Insert(buf);
 }
 
+/**
+ * @brief 查询 MemTable::Get
+ * 
+ * \todo Memtable中key的比较问题，将长度放在key的前面，不会改变有序性吗？需要看比较函数的实现
+ * 
+ * @param key 
+ * @param value 
+ * @param s 
+ * @return true 
+ * @return false 
+ */
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
   Slice memkey = key.memtable_key();
   Table::Iterator iter(&table_);
   iter.Seek(memkey.data());
   if (iter.Valid()) {
-    // entry format is:
-    //    klength  varint32
-    //    userkey  char[klength]
-    //    tag      uint64
-    //    vlength  varint32
-    //    value    char[vlength]
-    // Check that it belongs to same user key.  We do not check the
-    // sequence number since the Seek() call above should have skipped
-    // all entries with overly large sequence numbers.
+    /// entry format is:
+    ///    klength  varint32
+    ///    userkey  char[klength]
+    ///    tag      uint64
+    ///    vlength  varint32
+    ///    value    char[vlength]
+    /// Check that it belongs to same user key.  We do not check the
+    /// sequence number since the Seek() call above should have skipped
+    /// all entries with overly large sequence numbers.
+    /// 检查它是否属于同一用户key。我们不检查序列号，
+    /// 因为上面的Seek（）调用应该跳过所有序列号太大的条目。
     const char* entry = iter.key();
     uint32_t key_length;
     const char* key_ptr = GetVarint32Ptr(entry, entry + 5, &key_length);

@@ -145,12 +145,12 @@ class Version {
   void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
-  VersionSet* vset_;  // VersionSet to which this Version belongs
+  VersionSet* vset_;  /// VersionSet to which this Version belongs
   Version* next_;     // Next version in linked list
   Version* prev_;     // Previous version in linked list
   int refs_;          // Number of live refs to this version
 
-  // List of files per level
+  /// List of files per level
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats.

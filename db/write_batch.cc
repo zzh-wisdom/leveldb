@@ -21,9 +21,17 @@
 #include "leveldb/db.h"
 #include "util/coding.h"
 
+/**
+ * \file write_batch.cc
+ * @brief batch write implication
+ */
+
 namespace leveldb {
 
-// WriteBatch header has an 8-byte sequence number followed by a 4-byte count.
+/**
+ * WriteBatch header has an 8-byte sequence number followed by a 4-byte count.
+ * 小端存储方式，与机器无关的存储
+ */
 static const size_t kHeader = 12;
 
 WriteBatch::WriteBatch() { Clear(); }
@@ -39,6 +47,16 @@ void WriteBatch::Clear() {
 
 size_t WriteBatch::ApproximateSize() const { return rep_.size(); }
 
+/**
+ * @brief 将batch中的操作依次执行
+ * 
+ * 根据类型，对应Put或者Delete \n
+ * 遍历WriteBatch解析出并以key/value/valuetype的形式写入\n
+ * Delete操作只写入删除的key，ValueType是KTypeDeletion，表示key以及被删除，后续compaction会删除此key-value。
+ * 
+ * @param handler 
+ * @return Status 
+ */
 Status WriteBatch::Iterate(Handler* handler) const {
   Slice input(rep_);
   if (input.size() < kHeader) {
@@ -79,6 +97,14 @@ Status WriteBatch::Iterate(Handler* handler) const {
   }
 }
 
+/**
+ * @brief 计算xx个数
+ * 
+ * 将WriteBatch中rep_的第8-11的四个字节解码成一个uint32的整数
+ * 
+ * @param b 
+ * @return int 
+ */
 int WriteBatchInternal::Count(const WriteBatch* b) {
   return DecodeFixed32(b->rep_.data() + 8);
 }
@@ -95,6 +121,12 @@ void WriteBatchInternal::SetSequence(WriteBatch* b, SequenceNumber seq) {
   EncodeFixed64(&b->rep_[0], seq);
 }
 
+/**
+ * @brief 
+ * 
+ * @param key 
+ * @param value 
+ */
 void WriteBatch::Put(const Slice& key, const Slice& value) {
   WriteBatchInternal::SetCount(this, WriteBatchInternal::Count(this) + 1);
   rep_.push_back(static_cast<char>(kTypeValue));
@@ -113,6 +145,10 @@ void WriteBatch::Append(const WriteBatch& source) {
 }
 
 namespace {
+/**
+ * @brief MemTable插入器
+ * 
+ */
 class MemTableInserter : public WriteBatch::Handler {
  public:
   SequenceNumber sequence_;
@@ -129,6 +165,13 @@ class MemTableInserter : public WriteBatch::Handler {
 };
 }  // namespace
 
+/**
+ * @brief 插入器，将 WriteBatch 中的数据写入到 MemTable
+ * 
+ * @param b 
+ * @param memtable 
+ * @return Status 
+ */
 Status WriteBatchInternal::InsertInto(const WriteBatch* b, MemTable* memtable) {
   MemTableInserter inserter;
   inserter.sequence_ = WriteBatchInternal::Sequence(b);

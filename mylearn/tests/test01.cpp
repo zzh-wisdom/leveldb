@@ -9,7 +9,7 @@ int main(){
     leveldb::DB* db;
     leveldb::Options options;
     options.create_if_missing = true;
-    leveldb::Status status = leveldb::DB::Open(options, "/tmp/testdb", &db);
+    leveldb::Status status = leveldb::DB::Open(options, "./tmp/testdb", &db);
     cout << status.ToString() << endl;
     assert(status.ok());
     int count = 0;
@@ -31,7 +31,7 @@ int main(){
         std::cout<<value<<std::endl;
 
         count ++; 
-    }   
+    }
 
     delete db; //关闭数据库
 

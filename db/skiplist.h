@@ -81,7 +81,7 @@ class SkipList {
     // REQUIRES: Valid()
     void Prev();
 
-    // Advance to the first entry with a key >= target
+    /// Advance to the first entry with a key >= target
     void Seek(const Key& target);
 
     // Position at the first entry in list.
@@ -252,6 +252,14 @@ int SkipList<Key, Comparator>::RandomHeight() {
 }
 
 template <typename Key, class Comparator>
+/**
+ * @brief KeyIsAfterNode 大于或等于
+ * 
+ * @param key 
+ * @param n 
+ * @return true 
+ * @return false 
+ */
 bool SkipList<Key, Comparator>::KeyIsAfterNode(const Key& key, Node* n) const {
   // null n is considered infinite
   return (n != nullptr) && (compare_(n->key, key) < 0);

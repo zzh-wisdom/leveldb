@@ -278,6 +278,14 @@ static bool NewestFirst(FileMetaData* a, FileMetaData* b) {
   return a->number > b->number;
 }
 
+/**
+ * @brief 
+ * 
+ * @param user_key 
+ * @param internal_key 
+ * @param arg 
+ * @param func 
+ */
 void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                                  bool (*func)(void*, int, FileMetaData*)) {
   const Comparator* ucmp = vset_->icmp_.user_comparator();
@@ -321,6 +329,15 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
   }
 }
 
+/**
+ * @brief 
+ * 
+ * @param options 
+ * @param k 
+ * @param value 
+ * @param stats 
+ * @return Status 
+ */
 Status Version::Get(const ReadOptions& options, const LookupKey& k,
                     std::string* value, GetStats* stats) {
   stats->seek_file = nullptr;

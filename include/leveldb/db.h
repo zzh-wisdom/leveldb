@@ -12,6 +12,14 @@
 #include "leveldb/iterator.h"
 #include "leveldb/options.h"
 
+/**
+ * @file db.h
+ * @brief db interface.
+ * 
+ * Detail.
+ * 
+ */
+
 namespace leveldb {
 
 // Update CMakeLists.txt if you change these
@@ -40,16 +48,29 @@ struct LEVELDB_EXPORT Range {
   Slice limit;  // Not included in the range
 };
 
-// A DB is a persistent ordered map from keys to values.
-// A DB is safe for concurrent access from multiple threads without
-// any external synchronization.
+/**
+ * @class DB db.h
+ * @brief leveldb外部接口的类。
+ * 
+ * A DB is a persistent ordered map from keys to values. 有序的键值映射。
+ * A DB is safe for concurrent access from multiple threads without
+ * any external synchronization. 多线程安全
+ */
 class LEVELDB_EXPORT DB {
  public:
-  // Open the database with the specified "name".
-  // Stores a pointer to a heap-allocated database in *dbptr and returns
-  // OK on success.
-  // Stores nullptr in *dbptr and returns a non-OK status on error.
-  // Caller should delete *dbptr when it is no longer needed.
+  /**
+   * @brief Open the database with the specified "name".
+   * 
+   * Stores a pointer to a heap-allocated database in *dbptr and returns
+   * OK on success.
+   * Stores nullptr in *dbptr and returns a non-OK status on error.
+   * \attention Caller should delete *dbptr when it is no longer needed.
+   * 
+   * @param options 
+   * @param name 
+   * @param dbptr 
+   * @return Status 
+   */
   static Status Open(const Options& options, const std::string& name,
                      DB** dbptr);
 
@@ -60,9 +81,18 @@ class LEVELDB_EXPORT DB {
 
   virtual ~DB();
 
-  // Set the database entry for "key" to "value".  Returns OK on success,
-  // and a non-OK status on error.
-  // Note: consider setting options.sync = true.
+  /**
+   * @brief Put操作。
+   * 
+   * Set the database entry for "key" to "value".  Returns OK on success,
+   * and a non-OK status on error.
+   * \attention consider setting options.sync = true.
+   * 
+   * @param[in] options 
+   * @param[in] key 
+   * @param[in] value 
+   * @return Status
+   */
   virtual Status Put(const WriteOptions& options, const Slice& key,
                      const Slice& value) = 0;
 

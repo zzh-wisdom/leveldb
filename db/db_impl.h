@@ -30,6 +30,9 @@ class DBImpl : public DB {
  public:
   DBImpl(const Options& options, const std::string& dbname);
 
+  /**
+   * \todo 了解delete的用法
+   */
   DBImpl(const DBImpl&) = delete;
   DBImpl& operator=(const DBImpl&) = delete;
 
@@ -155,7 +158,9 @@ class DBImpl : public DB {
     return internal_comparator_.user_comparator();
   }
 
-  // Constant after construction
+  /**
+   * @brief Constant after construction
+   */
   Env* const env_;
   const InternalKeyComparator internal_comparator_;
   const InternalFilterPolicy internal_filter_policy_;
@@ -182,7 +187,7 @@ class DBImpl : public DB {
   log::Writer* log_;
   uint32_t seed_ GUARDED_BY(mutex_);  // For sampling.
 
-  // Queue of writers.
+  /// Queue of writers.
   std::deque<Writer*> writers_ GUARDED_BY(mutex_);
   WriteBatch* tmp_batch_ GUARDED_BY(mutex_);
 
