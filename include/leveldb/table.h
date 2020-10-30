@@ -10,6 +10,17 @@
 #include "leveldb/export.h"
 #include "leveldb/iterator.h"
 
+/**
+ * \file table.h
+ * 
+ * @brief Table结构体
+ * 
+ * \sa 
+ *   - 官方英文解释： @ref doc/table_format.md
+ *   - 自我整理的文档： @ref  mydocs/table.md
+ * 
+ */
+
 namespace leveldb {
 
 class Block;

@@ -17,6 +17,9 @@
 
 namespace leveldb {
 
+/**
+ * \todo 倒数4个字节有什么含义？
+ */
 inline uint32_t Block::NumRestarts() const {
   assert(size_ >= sizeof(uint32_t));
   return DecodeFixed32(data_ + size_ - sizeof(uint32_t));

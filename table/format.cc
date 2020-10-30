@@ -62,6 +62,15 @@ Status Footer::DecodeFrom(Slice* input) {
   return result;
 }
 
+/**
+ * @brief 
+ * 
+ * @param file 
+ * @param options 
+ * @param handle 
+ * @param result 
+ * @return Status 
+ */
 Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
                  const BlockHandle& handle, BlockContents* result) {
   result->data = Slice();
@@ -83,6 +92,7 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
     return Status::Corruption("truncated block read");
   }
 
+  /// \todo 具体如何校验还带学习
   // Check the crc of the type and the block contents
   const char* data = contents.data();  // Pointer to where Read put the data
   if (options.verify_checksums) {
@@ -101,6 +111,10 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
         // File implementation gave us pointer to some other data.
         // Use it directly under the assumption that it will be live
         // while the file is open.
+        /**
+         * \todo 什么意思，为什么会出现不相等的情况（data != buf）
+         * 文件实现为我们提供了一些其他数据的指针。 直接使用它(在文件打开时,假设其处于存活的状态)。
+         */
         delete[] buf;
         result->data = Slice(data, n);
         result->heap_allocated = false;
@@ -113,7 +127,7 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
 
       // Ok
       break;
-    case kSnappyCompression: {
+    case kSnappyCompression: {   // 数据被压缩了，需要解压
       size_t ulength = 0;
       if (!port::Snappy_GetUncompressedLength(data, n, &ulength)) {
         delete[] buf;

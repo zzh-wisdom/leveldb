@@ -35,6 +35,19 @@ struct Table::Rep {
   Block* index_block;
 };
 
+/**
+ * @brief 从RandomAccessFile中打开，构建Table实例
+ * 
+ * 1. 解释footer，48bytes
+ * 2. 读取index_block的内容
+ * 3. 构建Table
+ * 
+ * @param options 
+ * @param file 
+ * @param size 
+ * @param table 
+ * @return Status 
+ */
 Status Table::Open(const Options& options, RandomAccessFile* file,
                    uint64_t size, Table** table) {
   *table = nullptr;

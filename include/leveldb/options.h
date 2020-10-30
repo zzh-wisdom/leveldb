@@ -64,6 +64,10 @@ struct LEVELDB_EXPORT Options {
   // errors.  This may have unforeseen ramifications: for example, a
   // corruption of one DB entry may cause a large number of entries to
   // become unreadable or for the entire DB to become unopenable.
+  /**
+   * 如果为true，则实现将对正在处理的数据进行主动检查，并且如果检测到任何错误，则将提早停止。
+   * 这可能会有无法预料的后果：例如，一个数据库条目的损坏可能导致大量条目变得不可读或整个数据库无法打开。
+   */
   bool paranoid_checks = false;
 
   // Use the specified object to interact with the environment,

@@ -37,12 +37,26 @@
 
 namespace leveldb {
 
+/**
+ * @brief Construct a new Block Builder:: Block Builder object
+ * 
+ * - 注意第一个重启点的位置为0，在构建的时候就要加入vector中
+ * - options->block_restart_interval表示当前重启点（其实也是一条记录）和上个重启点之间间隔了多少条记录。所以其值一定要大于等于1。
+ * 
+ * @param options 
+ */
 BlockBuilder::BlockBuilder(const Options* options)
     : options_(options), restarts_(), counter_(0), finished_(false) {
   assert(options->block_restart_interval >= 1);
   restarts_.push_back(0);  // First restart point is at offset 0
 }
 
+/**
+ * @brief 重置
+ * 
+ * 重置blockBuild，就好像刚构建一样
+ * 
+ */
 void BlockBuilder::Reset() {
   buffer_.clear();
   restarts_.clear();
@@ -52,6 +66,13 @@ void BlockBuilder::Reset() {
   last_key_.clear();
 }
 
+/**
+ * @brief 估算block大小
+ * 
+ * buffer数据的大小 + 重启点大小
+ * 
+ * @return size_t 
+ */
 size_t BlockBuilder::CurrentSizeEstimate() const {
   return (buffer_.size() +                       // Raw data buffer
           restarts_.size() * sizeof(uint32_t) +  // Restart array
@@ -68,6 +89,14 @@ Slice BlockBuilder::Finish() {
   return Slice(buffer_);
 }
 
+/**
+ * @brief Add KV
+ * 
+ * Add只添加KV对（一条记录）,重启点信息部分由Finish添加。
+ * 
+ * @param key 
+ * @param value 
+ */
 void BlockBuilder::Add(const Slice& key, const Slice& value) {
   Slice last_key_piece(last_key_);
   assert(!finished_);
