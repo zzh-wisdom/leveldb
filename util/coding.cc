@@ -25,7 +25,7 @@ char* EncodeVarint32(char* dst, uint32_t v) {
   if (v < (1 << 7)) {
     *(ptr++) = v;
   } else if (v < (1 << 14)) {
-    *(ptr++) = v | B;
+    *(ptr++) = v | B;  // 截断复制
     *(ptr++) = v >> 7;
   } else if (v < (1 << 21)) {
     *(ptr++) = v | B;
@@ -130,6 +130,16 @@ const char* GetVarint64Ptr(const char* p, const char* limit, uint64_t* value) {
   return nullptr;
 }
 
+/**
+ * @brief 从input解码Varint64数据到value
+ * 
+ * 注意：解码后，会将input的data_移动（跳过当前Varint64）
+ * 
+ * @param input 
+ * @param value 
+ * @return true 
+ * @return false 
+ */
 bool GetVarint64(Slice* input, uint64_t* value) {
   const char* p = input->data();
   const char* limit = p + input->size();

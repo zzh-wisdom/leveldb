@@ -18,6 +18,15 @@ static const size_t kFilterBase = 1 << kFilterBaseLg;
 FilterBlockBuilder::FilterBlockBuilder(const FilterPolicy* policy)
     : policy_(policy) {}
 
+/**
+ * @brief 开始 Block
+ * 
+ * 预处理工作，应该是用于判断是否要生成一个新的filter
+ * 
+ * 每2K数据创建一个filter
+ * 
+ * @param block_offset  data block 的 偏移
+ */
 void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
   uint64_t filter_index = (block_offset / kFilterBase);
   assert(filter_index >= filter_offsets_.size());
@@ -26,12 +35,32 @@ void FilterBlockBuilder::StartBlock(uint64_t block_offset) {
   }
 }
 
+/**
+ * @brief 添加key
+ * 
+ * 添加到 key_ 中，同时在 start_ 中记录偏移
+ * 
+ * @param key 
+ */
 void FilterBlockBuilder::AddKey(const Slice& key) {
   Slice k = key;
   start_.push_back(keys_.size());
   keys_.append(k.data(), k.size());
 }
 
+/**
+ * @brief 完成一个filter block的构建
+ * 
+ * filter block的结构示意图：
+ * <div align=center><img src="../images/filter block结构示意图.png" height="20%" width="30%"/></div>
+ * 
+ * 1. 如果还有key，则把剩下的key用来生成filter
+ * 2. 将每个filter的偏移添加到result_的末尾，不压缩PutFixed32
+ * 3. 添加偏移数组的偏移
+ * 4. 最后把lg参数添加，即`lg(2k)=11`
+ * 
+ * @return Slice 
+ */
 Slice FilterBlockBuilder::Finish() {
   if (!start_.empty()) {
     GenerateFilter();
@@ -48,6 +77,10 @@ Slice FilterBlockBuilder::Finish() {
   return Slice(result_);
 }
 
+/**
+ * @brief 生成一个新的 filter
+ * 
+ */
 void FilterBlockBuilder::GenerateFilter() {
   const size_t num_keys = start_.size();
   if (num_keys == 0) {
@@ -57,6 +90,7 @@ void FilterBlockBuilder::GenerateFilter() {
   }
 
   // Make list of keys from flattened key structure
+  // 记录 offset，以方便key的分界
   start_.push_back(keys_.size());  // Simplify length computation
   tmp_keys_.resize(num_keys);
   for (size_t i = 0; i < num_keys; i++) {
@@ -67,6 +101,7 @@ void FilterBlockBuilder::GenerateFilter() {
 
   // Generate filter for current set of keys and append to result_.
   filter_offsets_.push_back(result_.size());
+  // 生成的filter数据追加到result_中
   policy_->CreateFilter(&tmp_keys_[0], static_cast<int>(num_keys), &result_);
 
   tmp_keys_.clear();
@@ -87,10 +122,19 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
   num_ = (n - 5 - last_word) / 4;
 }
 
+/**
+ * @brief 使用filter判断key是否可能存在
+ * 
+ * @param block_offset  data block中的偏移
+ * @param key 
+ * @return true 
+ * @return false 
+ */
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
   uint64_t index = block_offset >> base_lg_;
   if (index < num_) {
     uint32_t start = DecodeFixed32(offset_ + index * 4);
+    /// 特别地，最后一个filter数据的limit其实就是偏移数组的开始偏移
     uint32_t limit = DecodeFixed32(offset_ + index * 4 + 4);
     if (start <= limit && limit <= static_cast<size_t>(offset_ - data_)) {
       Slice filter = Slice(data_ + start, limit - start);

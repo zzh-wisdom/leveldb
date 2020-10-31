@@ -15,12 +15,23 @@ namespace leveldb {
 struct BlockContents;
 class Comparator;
 
+/**
+ * @brief Block 类
+ * 
+ * block数据的解码读取是通过该类实现的
+ * 
+ * \sa 
+ *   - 自我整理的文档： @ref  mydocs/table.md
+ * 
+ */
 class Block {
  public:
-  // Initialize the block with the specified contents.
+  /// Initialize the block with the specified contents.
   explicit Block(const BlockContents& contents);
 
+  /// Block 类不可拷贝
   Block(const Block&) = delete;
+  /// Block 类不可拷贝
   Block& operator=(const Block&) = delete;
 
   ~Block();
@@ -29,14 +40,14 @@ class Block {
   Iterator* NewIterator(const Comparator* comparator);
 
  private:
-  class Iter;
+  class Iter;  // 隐藏 block 内部 迭代器实现的细节
 
   uint32_t NumRestarts() const;
 
-  const char* data_;
-  size_t size_;
-  uint32_t restart_offset_;  // Offset in data_ of restart array
-  bool owned_;               // Block owns data_[]
+  const char* data_;         /// block数据指针
+  size_t size_;              /// block数据大小
+  uint32_t restart_offset_;  /// Offset in data_ of restart array 重启点数组在data_中的偏移
+  bool owned_;               /// Block owns data_[]  data_[]是否是Block拥有的
 };
 
 }  // namespace leveldb

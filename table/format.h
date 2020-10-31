@@ -20,9 +20,14 @@ struct ReadOptions;
 
 // BlockHandle is a pointer to the extent of a file that stores a data
 // block or a meta block.
+/**
+ * \details BlockHandle是指向存储data块或meta块的文件范围的指针。
+ * 
+ */
 class BlockHandle {
  public:
-  // Maximum encoding length of a BlockHandle
+  /// Maximum encoding length of a BlockHandle
+  /// 一个 BlockHandle 最大可以编码成20个字节，这是因为采用了压缩(PutVarint64)的编码方案
   enum { kMaxEncodedLength = 10 + 10 };
 
   BlockHandle();
@@ -49,11 +54,10 @@ class BlockHandle {
  * @brief 页脚Footer封装了存储在每个表文件末尾的固定信息。
  * 
  * 一个48个字节：
- *  - Index Block                          —— 16 bytes
- *  - MetaIndex Block                      —— 16 bytes
- *  - Padding填充                          —— 8 bytes
- *  - magic number： 固定值，标识SSTable   —— 8 bytes
- * 
+ *  - Index Block                          —— 16-20 bytes
+ *  - MetaIndex Block                      —— 16-20 bytes
+ *  - Padding填充                          —— 0-8 bytes
+ *  - magic number： 固定值，标识SSTable     —— 8 bytes
  */
 class Footer {
  public:
@@ -70,11 +74,11 @@ class Footer {
 
   Footer() = default;
 
-  // The block handle for the metaindex block of the table
+  /// The block handle for the metaindex block of the table
   const BlockHandle& metaindex_handle() const { return metaindex_handle_; }
   void set_metaindex_handle(const BlockHandle& h) { metaindex_handle_ = h; }
 
-  // The block handle for the index block of the table
+  /// The block handle for the index block of the table
   const BlockHandle& index_handle() const { return index_handle_; }
   void set_index_handle(const BlockHandle& h) { index_handle_ = h; }
 
@@ -86,9 +90,9 @@ class Footer {
   BlockHandle index_handle_;
 };
 
-// kTableMagicNumber was picked by running
-//    echo http://code.google.com/p/leveldb/ | sha1sum
-// and taking the leading 64 bits.
+/// kTableMagicNumber was picked by running
+///    echo http://code.google.com/p/leveldb/ | sha1sum
+/// and taking the leading 64 bits.
 static const uint64_t kTableMagicNumber = 0xdb4775248b80fb57ull;
 
 /// 1-byte type + 32-bit crc
@@ -96,18 +100,23 @@ static const uint64_t kTableMagicNumber = 0xdb4775248b80fb57ull;
 static const size_t kBlockTrailerSize = 5;
 
 struct BlockContents {
-  Slice data;           // Actual contents of data
-  bool cachable;        // True iff data can be cached
-  bool heap_allocated;  // True iff caller should delete[] data.data()
+  Slice data;           /// Actual contents of data
+  bool cachable;        /// True iff data can be cached
+  bool heap_allocated;  /// True iff caller should delete[] data.data()
 };
 
-// Read the block identified by "handle" from "file".  On failure
-// return non-OK.  On success fill *result and return OK.
+/// Read the block identified by "handle" from "file".  On failure
+/// return non-OK.  On success fill *result and return OK.
 Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
                  const BlockHandle& handle, BlockContents* result);
 
 // Implementation details follow.  Clients should ignore,
 
+/**
+ * @brief Construct a new Block Handle:: Block Handle object
+ * 
+ * 将 offset_ 和 size_ 初始化为无穷大
+ */
 inline BlockHandle::BlockHandle()
     : offset_(~static_cast<uint64_t>(0)), size_(~static_cast<uint64_t>(0)) {}
 

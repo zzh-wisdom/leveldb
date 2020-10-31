@@ -1,15 +1,16 @@
 # Table
 
+可以在Github上查看 [原文](https://github.com/zzh-wisdom/leveldb/blob/mylearn/mydocs/table.md)
+
 - [1. Block](#1-block)
-  - [Block存储格式总览](#block存储格式总览)
-  - [block data 的结构](#block-data-的结构)
+  - [1.1. Block存储格式总览](#11-block存储格式总览)
+  - [1.2. block data 的结构](#12-block-data-的结构)
+  - [1.3. 样例](#13-样例)
 - [2. File & SSTable Format](#2-file--sstable-format)
-  - [2.2. 结构总览](#22-结构总览)
-  - [2.3. Footer](#23-footer)
-  - [2.4. Meta Block](#24-meta-block)
-    - [2.4.1. "filter" Meta Block](#241-filter-meta-block)
-    - [2.4.2. "stats" Meta Block](#242-stats-meta-block)
-  - [2.5. Data block](#25-data-block)
+  - [2.1. 结构总览](#21-结构总览)
+  - [2.2. Footer](#22-footer)
+  - [2.3. Meta Block](#23-meta-block)
+  - [2.4. Data block](#24-data-block)
 
 > 参考：
 > Github doc： <https://github.com/google/leveldb/blob/master/doc/table_format.md>
@@ -19,7 +20,7 @@
 
 ## 1. Block
 
-### Block存储格式总览
+### 1.1. Block存储格式总览
 
 Block的种类很多，包括Data Block、Meta Block等，每个Block由三部分组成，如下图所示：
 
@@ -34,9 +35,13 @@ Block的种类很多，包括Data Block、Meta Block等，每个Block由三部�
 
 LevelDB对block data的管理是读写分离的，读取后的遍历查询操作由Block类实现，block data的构建则由BlockBuilder类实现。
 
-### block data 的结构
+总体结构如下：
 
 ![](images/leveldb-table-2020-10-30-19-16-03.png)
+
+### 1.2. block data 的结构
+
+注意： 该部分不包括 type 和 crc32。
 
 Block中每条数据Entry是以Key-Value方式存储的，并且是按Key有序存储，Leveldb很巧妙了利用了有序数组相邻Key可能有**相同的Prefix**的特点来减少存储数据量。如上图所示，每个Entry只记录自己的Key与前一个Entry Key的不同部分，例如要顺序存储Key值“apple”和“applepen”的两条数据，这里第二个Entry中只需要存储“pen”的信息。
 
@@ -63,10 +68,15 @@ block data的结尾段格式是：
 
 尾段存储的是重启点相关信息，包括重启点的位置和个数。元素restarts[i]存储的是block data第i个重启点距离block data首地址的偏移。很明显第一条记录，总是第一个重启点，也就是restarts[0] = 0。num_restarts是重启点的个数。
 
+### 1.3. 样例
+
+假设添加的5个KV对分别是("the bus","1")，("the car","11")，("the color","111")，("the mouse","1111")，("the tree","11111")，那么当options_->block_restart_interval=3时，block data的示意图如下所示。
+
+![](images/leveldb-table-2020-10-30-22-40-36.png)
 
 ## 2. File & SSTable Format
 
-### 2.2. 结构总览
+### 2.1. 结构总览
 
 ```cpp
 <beginning_of_file>
@@ -93,7 +103,7 @@ block data的结尾段格式是：
 - Index block：只有一个，每隔一个Data block包含一个条目，其中Key是一个字符串，它大于等于该Data block最后一个Key，且小于紧跟后面一个Data block的第一个Key（即是分界Key）。值是Data block的BlockHandle。
 - Footer：处于文件的最后，包含MetaIndex block和Index block的BlockHandle以及一个magic numbe。
 
-### 2.3. Footer
+### 2.2. Footer
 
 Footer是SST文件解析开始的地方，通过Footer中记录的这两个关键元信息Block的位置，可以方便的开启之后的解析工作。
 
@@ -109,14 +119,16 @@ Footer的内容如下：
 
 代码实现中Footer有48字节：
 
-- Index Block --------------------------- 16 bytes
-- MetaIndex Block ----------------------- 16 bytes
-- Padding填充 --------------------------- 8 bytes
-- magic number（标识SSTable是否合法）---- 8 bytes
+- Index Block --------------------------- 16-20 bytes
+- MetaIndex Block ----------------------- 16-20 bytes
+- Padding填充 ---------------------------- 0-8 bytes
+- magic number（标识SSTable是否合法）------- 8 bytes
 
-### 2.4. Meta Block
+实际上，handle最大可以达到20bytes，此时Padding为0。
 
-#### 2.4.1. "filter" Meta Block
+### 2.3. Meta Block
+
+#### 2.3.1. "filter" Meta Block
 
 如果在打开数据库时指定了`FilterPolicy`，一个filter 块将存储在每个表中(即Meta block为Filter block)。 此时，MetaIndex Block 块包含一个条目，该条目从filter.\<N\>映射到filter block的BlockHandle，其中\<N\>是过滤器策略的Name（）方法返回的字符串。
 
@@ -147,7 +159,7 @@ Filter block存储一系列filters，其中`filter i`包含`FilterPolicy::Create
 lg(base)                              : 1 byte
 ```
 
-#### 2.4.2. "stats" Meta Block
+#### 2.3.2. "stats" Meta Block
 
 此时， meta block包含一系列统计信息，Key是统计信息的名称，Value包含统计信息。
 
@@ -162,7 +174,7 @@ number of entries
 number of data blocks
 ```
 
-### 2.5. Data block
+### 2.4. Data block
 
 以Key-Value的方式存储实际数据，其中Key定义为：
 

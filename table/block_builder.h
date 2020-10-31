@@ -24,6 +24,13 @@ namespace leveldb {
 
 struct Options;
 
+/**
+ * @brief Block 构建
+ * 
+ * \sa 
+ *   - 自我整理的文档： @ref  mydocs/table.md
+ * 
+ */
 class BlockBuilder {
  public:
   explicit BlockBuilder(const Options* options);

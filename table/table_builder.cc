@@ -36,32 +36,38 @@ struct TableBuilder::Rep {
   }
 
   Options options;
-  Options index_block_options;
-  WritableFile* file;
-  uint64_t offset;
-  Status status;
-  BlockBuilder data_block;
-  BlockBuilder index_block;
-  std::string last_key;
-  int64_t num_entries;
-  bool closed;  // Either Finish() or Abandon() has been called.
-  FilterBlockBuilder* filter_block;
+  Options index_block_options;          /// index block的选项, index_block_options.block_restart_interval = 1;即key不共用前缀
+  WritableFile* file;                   /// sstable文件
+  uint64_t offset;                      /// 要写入data block在sstable文件中的偏移，初始0
+  Status status;                        /// 当前状态, 初始ok
+  BlockBuilder data_block;              /// 当前操作的data block
+  BlockBuilder index_block;             /// sstable的index block
+  std::string last_key;                 /// 当前data block最后的k/v对的key
+  int64_t num_entries;                  /// kv数量
+  bool closed;                          /// Either Finish() or Abandon() has been called.
+  FilterBlockBuilder* filter_block;     /// 过滤器块数据，即Meta Block
 
-  // We do not emit the index entry for a block until we have seen the
-  // first key for the next data block.  This allows us to use shorter
-  // keys in the index block.  For example, consider a block boundary
-  // between the keys "the quick brown fox" and "the who".  We can use
-  // "the r" as the key for the index block entry since it is >= all
-  // entries in the first block and < all entries in subsequent
-  // blocks.
-  //
-  // Invariant: r->pending_index_entry is true only if data_block is empty.
+  /// We do not emit the index entry for a block until we have seen the
+  /// first key for the next data block.  This allows us to use shorter
+  /// keys in the index block.  For example, consider a block boundary
+  /// between the keys "the quick brown fox" and "the who".  We can use
+  /// "the r" as the key for the index block entry since it is >= all
+  /// entries in the first block and < all entries in subsequent
+  /// blocks.
+  ///
+  /// @invariant r->pending_index_entry is true only if data_block is empty.
   bool pending_index_entry;
-  BlockHandle pending_handle;  // Handle to add to index block
+  BlockHandle pending_handle;  /// Handle to add to index block
 
-  std::string compressed_output;
+  std::string compressed_output;  ///压缩后的data block，临时存储，写入后即被清空
 };
 
+/**
+ * @brief Construct a new Table Builder:: Table Builder object
+ * 
+ * @param options 
+ * @param file 
+ */
 TableBuilder::TableBuilder(const Options& options, WritableFile* file)
     : rep_(new Rep(options, file)) {
   if (rep_->filter_block != nullptr) {

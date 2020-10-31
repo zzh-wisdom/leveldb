@@ -19,6 +19,13 @@
 #include "leveldb/options.h"
 #include "leveldb/status.h"
 
+/**
+ * \file table_builder.h
+ * 
+ * \sa 
+ *   - 官方英文解释： @ref doc/table_format.md
+ *   - 自我整理的文档： @ref  mydocs/table.md
+ */
 namespace leveldb {
 
 class BlockBuilder;
@@ -27,15 +34,20 @@ class WritableFile;
 
 class LEVELDB_EXPORT TableBuilder {
  public:
-  // Create a builder that will store the contents of the table it is
-  // building in *file.  Does not close the file.  It is up to the
-  // caller to close the file after calling Finish().
+  /// Create a builder that will store the contents of the table it is
+  /// building in *file.  Does not close the file.  It is up to the
+  /// caller to close the file after calling Finish().
   TableBuilder(const Options& options, WritableFile* file);
 
   TableBuilder(const TableBuilder&) = delete;
   TableBuilder& operator=(const TableBuilder&) = delete;
 
   // REQUIRES: Either Finish() or Abandon() has been called.
+  /**
+   * @brief Destroy the Table Builder object
+   * 
+   * /pre Either Finish() or Abandon() has been called.
+   */
   ~TableBuilder();
 
   // Change the options used by this builder.  Note: only some of the
@@ -44,25 +56,51 @@ class LEVELDB_EXPORT TableBuilder {
   // passed to the constructor is different from its value in the
   // structure passed to this method, this method will return an error
   // without changing any fields.
+  /**
+   * @details 只能修改那些可以动态调整的选项，否则返回error
+   */
   Status ChangeOptions(const Options& options);
 
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
+  /**
+   * @brief Add key,value to the table being constructed.
+   * 
+   * @pre key is after any previously added key according to comparator.
+   * @pre Finish(), Abandon() have not been called
+   * 
+   * @param key 
+   * @param value 
+   */
   void Add(const Slice& key, const Slice& value);
 
   // Advanced operation: flush any buffered key/value pairs to file.
   // Can be used to ensure that two adjacent entries never live in
   // the same data block.  Most clients should not need to use this method.
   // REQUIRES: Finish(), Abandon() have not been called
+  /**
+   * @brief flush any buffered key/value pairs to file.
+   * 
+   * @pre Finish(), Abandon() have not been called
+   * 
+   */
   void Flush();
 
-  // Return non-ok iff some error has been detected.
+  /// @details Return non-ok iff some error has been detected.
   Status status() const;
 
   // Finish building the table.  Stops using the file passed to the
   // constructor after this function returns.
   // REQUIRES: Finish(), Abandon() have not been called
+  /**
+   * @details Finish building the table.  Stops using the file passed to the
+   * constructor after this function returns.
+   * 
+   * @pre Finish(), Abandon() have not been called
+   * 
+   * @return Status 
+   */
   Status Finish();
 
   // Indicate that the contents of this builder should be abandoned.  Stops
@@ -70,13 +108,22 @@ class LEVELDB_EXPORT TableBuilder {
   // If the caller is not going to call Finish(), it must call Abandon()
   // before destroying this builder.
   // REQUIRES: Finish(), Abandon() have not been called
+  /**
+   * @details Indicate that the contents of this builder should be abandoned.  
+   * Stops using the file passed to the constructor after this function returns.
+   * If the caller is not going to call Finish(), it must call Abandon()
+   * before destroying this builder.
+   * 
+   * @pre REQUIRES: Finish(), Abandon() have not been called
+   * 
+   */
   void Abandon();
 
-  // Number of calls to Add() so far.
+  /// @details Number of calls to Add() so far. 即获取kv的数目
   uint64_t NumEntries() const;
 
-  // Size of the file generated so far.  If invoked after a successful
-  // Finish() call, returns the size of the final generated file.
+  /// @details Size of the file generated so far.  If invoked after a successful
+  /// Finish() call, returns the size of the final generated file.
   uint64_t FileSize() const;
 
  private:
@@ -84,7 +131,7 @@ class LEVELDB_EXPORT TableBuilder {
   void WriteBlock(BlockBuilder* block, BlockHandle* handle);
   void WriteRawBlock(const Slice& data, CompressionType, BlockHandle* handle);
 
-  struct Rep;
+  struct Rep;  // 这样声明是为了隐藏细节
   Rep* rep_;
 };
 

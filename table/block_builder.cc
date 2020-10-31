@@ -79,6 +79,14 @@ size_t BlockBuilder::CurrentSizeEstimate() const {
           sizeof(uint32_t));                     // Restart array length
 }
 
+/**
+ * @brief 完成当前Block的构建
+ * 
+ * Finish只是在记录存储区后边添加了重启点信息。
+ * 重启点信息没有进行压缩
+ * 
+ * @return Slice 
+ */
 Slice BlockBuilder::Finish() {
   // Append restart array
   for (size_t i = 0; i < restarts_.size(); i++) {
@@ -93,6 +101,11 @@ Slice BlockBuilder::Finish() {
  * @brief Add KV
  * 
  * Add只添加KV对（一条记录）,重启点信息部分由Finish添加。
+ * 
+ * 样例：
+ * 假设添加的5个KV对分别是("the bus","1")，("the car","11")，("the color","111")，("the mouse","1111")，("the tree","11111")，
+ * 那么当options_->block_restart_interval=3时，block data的示意图如下所示。
+ * <div align=center><img src="../mydocs/images/leveldb-table-2020-10-30-22-40-36.png" height="40%" width="60%"/></div>
  * 
  * @param key 
  * @param value 
@@ -118,6 +131,7 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   const size_t non_shared = key.size() - shared;
 
   // Add "<shared><non_shared><value_size>" to buffer_
+  // 注意这里为了节约空间，进行了压缩
   PutVarint32(&buffer_, shared);
   PutVarint32(&buffer_, non_shared);
   PutVarint32(&buffer_, value.size());
@@ -127,6 +141,7 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   buffer_.append(value.data(), value.size());
 
   // Update state
+  // 这样写可以使内存copy最小化
   last_key_.resize(shared);
   last_key_.append(key.data() + shared, non_shared);
   assert(Slice(last_key_) == key);
