@@ -118,6 +118,7 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
  * 1. 根据 file_number 和 file_size 查找对应 Cache 的 Handle
  * 2. 根据handle找到对应的Table
  * 3. 在Table中查找key
+ * 4. cache_->Release(handle);
  * 
  * @param options 
  * @param file_number SSTable文件编号

@@ -19,37 +19,44 @@ namespace leveldb {
 
 class Env;
 
+/**
+ * @brief TableCache缓存
+ * 
+ * TableCache缓存的是Table对象，每个DB一个，它内部使用一个LRUCache缓存所有的table对象。
+ * 实际上其内容是{file number, TableAndFile*}。TableAndFile是一个拥有2个变量的结构体：RandomAccessFile*和Table*；
+ * 
+ */
 class TableCache {
  public:
   TableCache(const std::string& dbname, const Options& options, int entries);
   ~TableCache();
 
-  // Return an iterator for the specified file number (the corresponding
-  // file length must be exactly "file_size" bytes).  If "tableptr" is
-  // non-null, also sets "*tableptr" to point to the Table object
-  // underlying the returned iterator, or to nullptr if no Table object
-  // underlies the returned iterator.  The returned "*tableptr" object is owned
-  // by the cache and should not be deleted, and is valid for as long as the
-  // returned iterator is live.
+  /// Return an iterator for the specified file number (the corresponding
+  /// file length must be exactly "file_size" bytes).  If "tableptr" is
+  /// non-null, also sets "*tableptr" to point to the Table object
+  /// underlying the returned iterator, or to nullptr if no Table object
+  /// underlies the returned iterator.  The returned "*tableptr" object is owned
+  /// by the cache and should not be deleted, and is valid for as long as the
+  /// returned iterator is live.
   Iterator* NewIterator(const ReadOptions& options, uint64_t file_number,
                         uint64_t file_size, Table** tableptr = nullptr);
 
-  // If a seek to internal key "k" in specified file finds an entry,
-  // call (*handle_result)(arg, found_key, found_value).
+  /// If a seek to internal key "k" in specified file finds an entry,
+  /// call (*handle_result)(arg, found_key, found_value).
   Status Get(const ReadOptions& options, uint64_t file_number,
              uint64_t file_size, const Slice& k, void* arg,
              void (*handle_result)(void*, const Slice&, const Slice&));
 
-  // Evict any entry for the specified file number
+  /// Evict any entry for the specified file number
   void Evict(uint64_t file_number);
 
  private:
   Status FindTable(uint64_t file_number, uint64_t file_size, Cache::Handle**);
 
-  Env* const env_;
-  const std::string dbname_;
-  const Options& options_;
-  Cache* cache_;
+  Env* const env_;            /// 用来操作文件
+  const std::string dbname_;  /// db名
+  const Options& options_;    
+  Cache* cache_;              /// LRUCache
 };
 
 }  // namespace leveldb
