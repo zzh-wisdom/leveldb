@@ -32,6 +32,10 @@ class BlockBuilder;
 class BlockHandle;
 class WritableFile;
 
+/**
+ * leveldb通过TableBuilder类来构建每一个.sst文件
+ * 
+ */
 class LEVELDB_EXPORT TableBuilder {
  public:
   /// Create a builder that will store the contents of the table it is

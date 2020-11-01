@@ -56,7 +56,7 @@ class FilterBlockBuilder {
   const FilterPolicy* policy_;   /// 过滤的策略
   std::string keys_;             /// Flattened key contents 所有展开的key(没有压缩)，一个紧挨着一个，\b 每生成一个filter会清空
   std::vector<size_t> start_;    /// Starting index in keys_ of each key 每个 key 在 key_ 的偏移，\b 每生成一个filter会清空
-  std::string result_;           /// Filter data computed so far 当前所有 key 生成的 filter 数据，包含多个 filter
+  std::string result_;           /// Filter data computed so far 所有 key 生成的 filter 数据，包含多个 filter
   std::vector<Slice> tmp_keys_;  /// policy_->CreateFilter() argument， 用于暂时存储当前生成filter的所有key
   std::vector<uint32_t> filter_offsets_; /// 存储每个 filter 在 result_ 的偏移
 };

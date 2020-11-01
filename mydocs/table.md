@@ -130,7 +130,7 @@ Footer的内容如下：
 
 #### 2.3.1. "filter" Meta Block
 
-如果在打开数据库时指定了`FilterPolicy`，一个filter 块将存储在每个表中(即Meta block为Filter block)。 此时，MetaIndex Block 块包含一个条目，该条目从filter.\<N\>映射到filter block的BlockHandle，其中\<N\>是过滤器策略的Name（）方法返回的字符串。
+如果在打开数据库时指定了`FilterPolicy`，一个filter 块将存储在每个表中(即Meta block为Filter block, **且一个table只有一个Meta block**)。 此时，MetaIndex Block 块包含一个条目，该条目从filter.\<N\>映射到filter block的BlockHandle，其中\<N\>是过滤器策略的Name（）方法返回的字符串。
 
 Filter block存储一系列filters，其中`filter i`包含`FilterPolicy::CreateFilter()`对特定范围所有Key产生的输出，这些key都存储在同一个块（data block）中，且这个块在file中的偏移为：
 

@@ -35,7 +35,7 @@ struct TableBuilder::Rep {
     index_block_options.block_restart_interval = 1;
   }
 
-  Options options;
+  Options options;                      /// data_block的选项
   Options index_block_options;          /// index block的选项, index_block_options.block_restart_interval = 1;即key不共用前缀
   WritableFile* file;                   /// sstable文件
   uint64_t offset;                      /// 要写入data block在sstable文件中的偏移，初始0
@@ -65,6 +65,8 @@ struct TableBuilder::Rep {
 /**
  * @brief Construct a new Table Builder:: Table Builder object
  * 
+ * 调用 filter_block 的 StartBlock 方法
+ * 
  * @param options 
  * @param file 
  */
@@ -81,6 +83,15 @@ TableBuilder::~TableBuilder() {
   delete rep_;
 }
 
+/**
+ * @brief 改变选项
+ * 
+ * 能改变的选项有：
+ * - data block 的 block_restart_interval
+ * 
+ * @param options 
+ * @return Status 
+ */
 Status TableBuilder::ChangeOptions(const Options& options) {
   // Note: if more fields are added to Options, update
   // this function to catch changes that should not be allowed to
@@ -91,12 +102,28 @@ Status TableBuilder::ChangeOptions(const Options& options) {
 
   // Note that any live BlockBuilders point to rep_->options and therefore
   // will automatically pick up the updated options.
+  // 
+  // 注意 data_block 和 index_block（BlockBuilders）的 Options 分别指向下面这两个Option实例，所以就附带更新了
   rep_->options = options;
   rep_->index_block_options = options;
+  // 确保 block_restart_interval 为1，不被改变
   rep_->index_block_options.block_restart_interval = 1;
   return Status::OK();
 }
 
+/**
+ * @brief add kv
+ * 
+ * 1. 首先保证文件没有close，也就是没有调用过Finish/Abandon，以及保证当前status是ok的；如果当前有缓存的kv对，保证新加入的key是最大的。
+ * 2. 如果标记r->pending_index_entry为true，表明遇到下一个data block的第一个k/v，根据key调整r->last_key，
+ *    这是通过Comparator的FindShortestSeparator完成的。然后向index_block添加一条entry，最后将r->pending_index_entry设置为false。
+ * 3. 如果filter_block不为空，就把key加入到filter_block中。
+ * 4. 设置r->last_key = key，将(key, value)添加到r->data_block中，并更新entry数。
+ * 5. 如果data block的大小超过限制，就立刻Flush到文件中。
+ * 
+ * @param key 
+ * @param value 
+ */
 void TableBuilder::Add(const Slice& key, const Slice& value) {
   Rep* r = rep_;
   assert(!r->closed);
@@ -106,6 +133,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   }
 
   if (r->pending_index_entry) {
+    // 只有flush后，才将pending_index_entry置为true，所以index entry是在每一块flush，且下一块的第一个kv到来时，才写入的
     assert(r->data_block.empty());
     r->options.comparator->FindShortestSeparator(&r->last_key, key);
     std::string handle_encoding;
@@ -128,6 +156,15 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
   }
 }
 
+/**
+ * @brief 
+ * 
+ * 1. 确保rep未closed，当前data_block为空，r->pending_index_entry=false
+ * 2. 将block数据写入，并更新 pending_handle
+ * 3. 写入成功后，将pending_index_entry置为true，然后调用file的flush函数，数据落盘
+ * 4. 如果filter_block不等nullptr，根据 r->offset StartBlock
+ * 
+ */
 void TableBuilder::Flush() {
   Rep* r = rep_;
   assert(!r->closed);
@@ -144,6 +181,16 @@ void TableBuilder::Flush() {
   }
 }
 
+/**
+ * @brief 将data block写入文件，同时还设置data block的index entry信息(BlockHandle)
+ * 
+ * 写 block 数据时，在尾部额外添加type和crc信息(WriteRawBlock函数中实现)
+ * 
+ * 写完成后，将block reset
+ * 
+ * @param block 
+ * @param handle 
+ */
 void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   // File format contains a sequence of blocks where each block has:
   //    block_data: uint8[n]
@@ -169,6 +216,7 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
       } else {
         // Snappy not supported, or compressed less than 12.5%, so just
         // store uncompressed form
+        // 备份不超过 12.5%，则直接存储原始数据
         block_contents = raw;
         type = kNoCompression;
       }
@@ -180,6 +228,16 @@ void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle) {
   block->Reset();
 }
 
+/**
+ * @brief 写原生block数据到file，在block尾部添加type和crc
+ * 
+ * 将handle置为写前的 r->offset 和原生block的大小，
+ * 写入后，再更新 r->offset
+ * 
+ * @param block_contents 
+ * @param type  压缩的类型
+ * @param handle 
+ */
 void TableBuilder::WriteRawBlock(const Slice& block_contents,
                                  CompressionType type, BlockHandle* handle) {
   Rep* r = rep_;
@@ -201,6 +259,17 @@ void TableBuilder::WriteRawBlock(const Slice& block_contents,
 
 Status TableBuilder::status() const { return rep_->status; }
 
+/**
+ * @brief 调用Finish函数，表明调用者将所有已经添加的k/v对持久化到sstable，并关闭sstable文件。
+ * 
+ * 1. 调用Flush写入最后一块(如果有), 然后设置关闭标志closed=true。表明该sstable已经关闭，不能再添加k/v对。
+ * 2. 将（一个）filter block写入到文件（不压缩的方式），同时带回filter_block_handle
+ * 3. 将一条entry（从"filter.Name"到filter data位置的映射）添加到meta index block，然后写入文件。
+ * 4. 写入index block，如果成功Flush过data block，那么需要为最后一块data block设置index entry，并加入到index block中。
+ * 5. 写入Footer
+ * 
+ * @return Status 
+ */
 Status TableBuilder::Finish() {
   Rep* r = rep_;
   Flush();
@@ -258,6 +327,12 @@ Status TableBuilder::Finish() {
   return r->status;
 }
 
+/**
+ * @brief 放弃构建table
+ * 
+ * 简单将closed设置为true
+ * 
+ */
 void TableBuilder::Abandon() {
   Rep* r = rep_;
   assert(!r->closed);
