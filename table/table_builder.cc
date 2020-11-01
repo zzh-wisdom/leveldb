@@ -121,6 +121,8 @@ Status TableBuilder::ChangeOptions(const Options& options) {
  * 4. 设置r->last_key = key，将(key, value)添加到r->data_block中，并更新entry数。
  * 5. 如果data block的大小超过限制，就立刻Flush到文件中。
  * 
+ * \note index block的entry中，key是大于等于对应data block的最后一个key的字符串，而handle却是指向该data block的起始位置
+ * 
  * @param key 
  * @param value 
  */

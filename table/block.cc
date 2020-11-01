@@ -335,7 +335,7 @@ class Block::Iter : public Iterator {
  * @brief 新建一个 Iterator (虚基类)
  * 
  * @param comparator 
- * @return Iterator* 
+ * @return Iterator*  使用BytewiseComparator()
  */
 Iterator* Block::NewIterator(const Comparator* comparator) {
   if (size_ < sizeof(uint32_t)) {

@@ -75,6 +75,10 @@ class IteratorWrapper {
   }
 
  private:
+  /**
+   * @brief 根据iter_，更新 valid_ 和 key_
+   * 
+   */
   void Update() {
     valid_ = iter_->Valid();
     if (valid_) {
