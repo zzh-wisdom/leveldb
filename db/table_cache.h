@@ -56,7 +56,7 @@ class TableCache {
   Env* const env_;            /// 用来操作文件
   const std::string dbname_;  /// db名
   const Options& options_;    
-  Cache* cache_;              /// LRUCache
+  Cache* cache_;              /// LRUCache(ShardedLRUCache)
 };
 
 }  // namespace leveldb

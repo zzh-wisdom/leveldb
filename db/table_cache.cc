@@ -39,7 +39,7 @@ TableCache::TableCache(const std::string& dbname, const Options& options,
 TableCache::~TableCache() { delete cache_; }
 
 /**
- * @brief 查找对应的Cache的Handle。
+ * @brief 查找file对应的Cache的Handle。
  * 
  * 如果在Cache中没有找到对应的Handle，则从文件中读取内容到Cache中
  *  
@@ -47,6 +47,11 @@ TableCache::~TableCache() { delete cache_; }
  *  > - ldb
  *  > - sst
  *  > 按照上面的顺序依次打开，直到有一个成功
+ * 
+ * 1.  首先根据file number从cache中查找table，找到就直接返回成功。
+ * 2. 如果没有找到，说明table不在cache中，则根据file number和db name打开一个RadomAccessFile。
+ *    Table文件格式为：<db name>.<filenumber(%6u)>.sst。如果文件打开成功，则调用Table::Open读取sstable文件。
+ * 3. 如果Table::Open成功则，插入到Cache中。如果失败，则删除file，直接返回失败，失败的结果是不会cache的。
  * 
  * @param file_number 
  * @param file_size 
@@ -90,6 +95,19 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
   return s;
 }
 
+/**
+ * @brief 该函数为指定的file返回一个iterator
+ * 
+ * 对应的文件长度必须是"file_size"字节,
+ * 如果tableptr不是NULL，那么*tableptr保存的是底层的Table指针。
+ * 返回的*tableptr是cache拥有的，不能被删除，生命周期同返回的iterator
+ * 
+ * @param options 
+ * @param file_number 
+ * @param file_size 
+ * @param tableptr 
+ * @return Iterator* 
+ */
 Iterator* TableCache::NewIterator(const ReadOptions& options,
                                   uint64_t file_number, uint64_t file_size,
                                   Table** tableptr) {
@@ -114,6 +132,8 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
 
 /**
  * @brief 从TableCache中查找
+ * 
+ * 如果在指定文件中seek 到internal key "k" 找到一个entry，就调用 (*handle_result)(arg,found_key, found_value).
  * 
  * 1. 根据 file_number 和 file_size 查找对应 Cache 的 Handle
  * 2. 根据handle找到对应的Table
@@ -142,6 +162,13 @@ Status TableCache::Get(const ReadOptions& options, uint64_t file_number,
   return s;
 }
 
+/**
+ * @brief 该函数用以清除指定文件所有cache的entry
+ * 
+ * 函数实现很简单，就是根据file number清除cache对象。
+ * 
+ * @param file_number 
+ */
 void TableCache::Evict(uint64_t file_number) {
   char buf[sizeof(file_number)];
   EncodeFixed64(buf, file_number);

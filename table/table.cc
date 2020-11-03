@@ -36,7 +36,7 @@ struct Table::Rep {
 };
 
 /**
- * @brief 从RandomAccessFile中打开，构建Table实例(解析一个.sst文件)
+ * @brief 从RandomAccessFile中打开，构建Table实例(解析一个.sst文件，也有可能是.ldb)
  * 
  * 1. 首先从文件的结尾读取Footer，并Decode到Footer对象中，如果文件长度小于Footer的长度(48bytes)，则报错
  * 2. 根据Footer中的index_handle，读取index_block的内容
