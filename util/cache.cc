@@ -652,7 +652,7 @@ class ShardedLRUCache : public Cache {
   }
 
   /**
-   * @brief 生成一个新的id，用于处理多线程同时访问缓存时的同步
+   * @brief 生成一个新的id，用于处理多线程同时访问缓存时的同步，用于Block Cache
    * 
    * @return uint64_t 
    */

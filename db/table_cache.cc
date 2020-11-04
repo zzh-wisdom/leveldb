@@ -16,6 +16,14 @@ struct TableAndFile {
   Table* table;
 };
 
+/**
+ * @brief 为LRUCache注册的删除函数DeleteEntry。
+ * 
+ * 删除的value的类型为 TableAndFile
+ * 
+ * @param key 
+ * @param value 
+ */
 static void DeleteEntry(const Slice& key, void* value) {
   TableAndFile* tf = reinterpret_cast<TableAndFile*>(value);
   delete tf->table;
@@ -23,6 +31,12 @@ static void DeleteEntry(const Slice& key, void* value) {
   delete tf;
 }
 
+/**
+ * @brief 为Iterator注册的清除函数UnrefEntry
+ * 
+ * @param arg1 
+ * @param arg2 
+ */
 static void UnrefEntry(void* arg1, void* arg2) {
   Cache* cache = reinterpret_cast<Cache*>(arg1);
   Cache::Handle* h = reinterpret_cast<Cache::Handle*>(arg2);
@@ -136,8 +150,8 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
  * 如果在指定文件中seek 到internal key "k" 找到一个entry，就调用 (*handle_result)(arg,found_key, found_value).
  * 
  * 1. 根据 file_number 和 file_size 查找对应 Cache 的 Handle
- * 2. 根据handle找到对应的Table
- * 3. 在Table中查找key
+ * 2. 根据handle得到对应的Table
+ * 3. 在Table中查找key（InternalGet）
  * 4. cache_->Release(handle);
  * 
  * @param options 

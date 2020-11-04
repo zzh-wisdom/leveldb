@@ -28,10 +28,12 @@ class LEVELDB_EXPORT FilterPolicy {
  public:
   virtual ~FilterPolicy();
 
-  // Return the name of this policy.  Note that if the filter encoding
-  // changes in an incompatible way, the name returned by this method
-  // must be changed.  Otherwise, old incompatible filters may be
-  // passed to methods of this type.
+  /// Return the name of this policy.  
+  /// 
+  /// Note that if the filter encoding
+  /// changes in an incompatible way, the name returned by this method
+  /// must be changed.  Otherwise, old incompatible filters may be
+  /// passed to methods of this type.
   virtual const char* Name() const = 0;
 
   // keys[0,n-1] contains a list of keys (potentially with duplicates)
