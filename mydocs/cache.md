@@ -1,7 +1,7 @@
 # Cache
 
 - [1. Table cache](#1-table-cache)
-- [Block cache](#block-cache)
+- [2. Block cache](#2-block-cache)
 
 > 参考：
 >
@@ -27,7 +27,7 @@ Table Cache是基于ShardedLRUCache实现。key-value如下：
   - RandomAccessFile*: 指向磁盘打开的SSTable文件的文件指针。
   - Table*: 是指向内存中这个SSTable文件对应的Table结构指针，table结构在内存中，保存了SSTable的index内容以及用来指示block cache用的cache_id。
 
-## Block cache
+## 2. Block cache
 
 block cache是缓存的block数据（data block），block是table文件内组织数据的单位，也是从持久化存储中读取和写入的单位。由于table是按照key有序分布的，因此一个block内的数据也是按照key紧邻排布的（有序依照使用者传入的比较函数，默认按照字典序），类似于Linux中的page cache。
 
