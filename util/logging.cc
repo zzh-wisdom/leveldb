@@ -20,6 +20,14 @@ void AppendNumberTo(std::string* str, uint64_t num) {
   str->append(buf);
 }
 
+/**
+ * @brief AppendEscapedStringTo
+ * 
+ * 可打印的字符直接append，否则将其ascii值的十六进制可打印字符append
+ * 
+ * @param str 
+ * @param value 
+ */
 void AppendEscapedStringTo(std::string* str, const Slice& value) {
   for (size_t i = 0; i < value.size(); i++) {
     char c = value[i];

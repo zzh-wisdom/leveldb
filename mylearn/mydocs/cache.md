@@ -2,6 +2,7 @@
 
 - [1. Table cache](#1-table-cache)
 - [2. Block cache](#2-block-cache)
+- [3. 数据结构概况](#3-数据结构概况)
 
 > 参考：
 >
@@ -52,3 +53,13 @@ Cache* block_cache = table->rep_->options.block_cache;
     ```
 
 - value：Block的内容（即Block类）。
+
+## 3. 数据结构概况
+
+- LRUHandle：Cache单元，其value指针存储数据。
+- HandleTable：哈希表的实现，其中使用数组存hash元素，采用链表解决冲突，有扩展机制，尽量保证每个链表只有一个LRUHandle元素
+- LRUCache：HandleTable的进一步封装。系统管理HandleTable，里面包含in-use和LRU两个链表，负责实现回收机制。Cache加锁的最小单位。
+- ShardedLRUCache：Cache接口的一个实例。采用分片的结构组织LRUCache，共有16个分片。
+
+- TableCache：为Table实现的一个Cache实例，内部使用ShardedLRUCache
+

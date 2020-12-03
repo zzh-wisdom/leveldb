@@ -55,7 +55,7 @@ namespace {
 /**
  * @brief LRUHandle就是Cache中的一个节点
  * 
- * 这个结构体设计的巧妙之处在于，它既可以作为HashTable中的结点，也可以作为LRUCache中的结点。
+ *  --这个结构体设计的巧妙之处在于，它既可以作为HandleTable中的结点，也可以作为LRUCache中的结点。--
  * 
  */
 struct LRUHandle {
