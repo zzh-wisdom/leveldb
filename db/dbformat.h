@@ -100,7 +100,7 @@ void AppendInternalKey(std::string* result, const ParsedInternalKey& key);
 // On error, returns false, leaves "*result" in an undefined state.
 bool ParseInternalKey(const Slice& internal_key, ParsedInternalKey* result);
 
-// Returns the user key portion of an internal key.
+/// Returns the user key portion of an internal key.
 inline Slice ExtractUserKey(const Slice& internal_key) {
   assert(internal_key.size() >= 8);
   return Slice(internal_key.data(), internal_key.size() - 8);
@@ -132,13 +132,20 @@ class InternalKeyComparator : public Comparator {
   int Compare(const InternalKey& a, const InternalKey& b) const;
 };
 
-// Filter policy wrapper that converts from internal keys to user keys
+/// Filter policy wrapper that converts from internal keys to user keys
+/// 
+/// 它所做的就是从InternalKey拆分得到user key，然后在user key上做FilterPolicy的操作。
 class InternalFilterPolicy : public FilterPolicy {
  private:
   const FilterPolicy* const user_policy_;
 
  public:
   explicit InternalFilterPolicy(const FilterPolicy* p) : user_policy_(p) {}
+  /**
+   * @brief 返回 user_policy_ 的 Name()
+   * 
+   * @return const char* 
+   */
   const char* Name() const override;
   void CreateFilter(const Slice* keys, int n, std::string* dst) const override;
   bool KeyMayMatch(const Slice& key, const Slice& filter) const override;

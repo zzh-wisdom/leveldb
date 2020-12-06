@@ -97,7 +97,9 @@ entry组成：
 - log::Writer
 - log::Reader
 
+## Bloom Filter
 
+使用double hashing来模拟多个hash函数。
 
 ## 其他知识
 

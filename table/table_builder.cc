@@ -165,6 +165,7 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
  * 2. 将block数据写入，并更新 pending_handle
  * 3. 写入成功后，将pending_index_entry置为true，然后调用file的flush函数，数据落盘
  * 4. 如果filter_block不等nullptr，根据 r->offset StartBlock
+ *    可以看到，filter的范围并不是严格0-2kb-1，而是按照data block取整，即一个filter总是包含整数个完整的data block
  * 
  */
 void TableBuilder::Flush() {

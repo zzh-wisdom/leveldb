@@ -146,10 +146,20 @@ void InternalKeyComparator::FindShortSuccessor(std::string* key) const {
 
 const char* InternalFilterPolicy::Name() const { return user_policy_->Name(); }
 
+/**
+ * @brief CreateFilter
+ * 
+ * 从keys[]中提取user key再调用user_policy_->CreateFilter生成filter数据
+ * 
+ * @param keys internal_key
+ * @param n 
+ * @param dst 
+ */
 void InternalFilterPolicy::CreateFilter(const Slice* keys, int n,
                                         std::string* dst) const {
   // We rely on the fact that the code in table.cc does not mind us
   // adjusting keys[].
+  // table.cc中的代码不介意我们调整keys[]
   Slice* mkey = const_cast<Slice*>(keys);
   for (int i = 0; i < n; i++) {
     mkey[i] = ExtractUserKey(keys[i]);
@@ -158,6 +168,16 @@ void InternalFilterPolicy::CreateFilter(const Slice* keys, int n,
   user_policy_->CreateFilter(keys, n, dst);
 }
 
+/**
+ * @brief KeyMayMatch
+ * 
+ * 从key中提取user key再调用
+ * 
+ * @param key internal_keyuser_policy_->KeyMayMatch判断
+ * @param f 
+ * @return true 
+ * @return false 
+ */
 bool InternalFilterPolicy::KeyMayMatch(const Slice& key, const Slice& f) const {
   return user_policy_->KeyMayMatch(ExtractUserKey(key), f);
 }
