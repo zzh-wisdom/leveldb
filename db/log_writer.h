@@ -17,16 +17,24 @@ class WritableFile;
 
 namespace log {
 
+/**
+ * @brief log::Writer
+ * 
+ * 只有一个接口：AddRecord
+ * 
+ */
 class Writer {
  public:
-  // Create a writer that will append data to "*dest".
-  // "*dest" must be initially empty.
-  // "*dest" must remain live while this Writer is in use.
+  /// Create a writer that will append data to "*dest".
+  /// @attention
+  /// "*dest" must be initially empty.
+  /// "*dest" must remain live while this Writer is in use.
   explicit Writer(WritableFile* dest);
 
-  // Create a writer that will append data to "*dest".
-  // "*dest" must have initial length "dest_length".
-  // "*dest" must remain live while this Writer is in use.
+  /// Create a writer that will append data to "*dest".
+  /// @attention
+  /// "*dest" must have initial length "dest_length".
+  /// "*dest" must remain live while this Writer is in use.
   Writer(WritableFile* dest, uint64_t dest_length);
 
   Writer(const Writer&) = delete;
@@ -40,12 +48,12 @@ class Writer {
   Status EmitPhysicalRecord(RecordType type, const char* ptr, size_t length);
 
   WritableFile* dest_;
-  int block_offset_;  // Current offset in block
+  int block_offset_;  /// Current offset in block
 
-  // crc32c values for all supported record types.  These are
-  // pre-computed to reduce the overhead of computing the crc of the
-  // record type stored in the header.
-  uint32_t type_crc_[kMaxRecordType + 1];
+  /// crc32c values for all supported record types.  These are
+  /// pre-computed to reduce the overhead of computing the crc of the
+  /// record type stored in the header.
+  uint32_t type_crc_[kMaxRecordType + 1];  /// 存放的为Record Type预先计算的CRC32值
 };
 
 }  // namespace log

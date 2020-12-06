@@ -42,21 +42,7 @@ struct ParsedInternalKey {
 };
 ```
 
-## Memtable
-
-<https://blog.csdn.net/sparkliang/article/details/8604416>
-
-Memtable
-
-Immutable Memtable
-
-Memtable提供了写入KV记录，删除以及读取KV记录的接口，但是事实上Memtable并不执行真正的删除操作,删除某个Key的Value在Memtable内是作为插入一条记录实施的，但是会打上一个Key的删除标记，真正的删除操作在后面的 Compaction过程中，lazy delete。
-
-基于Skip list实现。
-
-Memtable只是一个结构类。
-
-## LookupKey & Memtable Key
+### LookupKey & Memtable Key
 
 Memtable的查询接口传入的是LookupKey，它由User Key和Sequence Number组合而成。
 
@@ -73,7 +59,69 @@ LookupKey中的字符串固定分配大小，防止小空间的频繁申请。
 
 BytewiseComparatorImpl：内置字典顺序比较器
 
-InternalKeyComparator：
+InternalKeyComparator：Internalkey比较器，User key部分使用用户传入的比较器，seq则按照降序排序
+
+## Memtable
+
+<https://blog.csdn.net/sparkliang/article/details/8604416>
+
+Memtable
+
+Immutable Memtable
+
+Memtable提供了写入KV记录，删除以及读取KV记录的接口，但是事实上Memtable并不执行真正的删除操作,删除某个Key的Value在Memtable内是作为插入一条记录实施的，但是会打上一个Key的删除标记，真正的删除操作在后面的 Compaction过程中，lazy delete。
+
+基于Skip list实现。
+
+Memtable只是一个结构类。
+
+
+
+entry组成：
+
+- klength  **varint32**      包括userkey和tag的长度，即ukey_size + 8
+- internal_key char[klength]
+  - userkey  char[ukey_size]
+  - tag      uint64   高7个字节是 SequenceNumber，最低一个字节是 ValueType
+- vlength  **varint32**
+- value    char[vlength]
+
+## Log
+
+所有的写操作都必须先成功的append到操作日志中，然后再更新内存memtable。这样做有两个有点：1可以将随机的写IO变成append，极大的提高写磁盘速度；2防止在节点down机导致内存数据丢失，造成数据丢失，这对系统来说是个灾难。
+
+见：./doc/log_format.md
+
+相关类：
+
+- log::Writer
+- log::Reader
+
+
+
+## 其他知识
+
+内存映射文件的读写效率：https://blog.csdn.net/mg0832058/article/details/5890688
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

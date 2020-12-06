@@ -31,6 +31,19 @@ Writer::Writer(WritableFile* dest, uint64_t dest_length)
 
 Writer::~Writer() = default;
 
+/**
+ * @brief AddRecord
+ * 
+ * 写记录
+ * 
+ * @attention
+ * 即使slice长度为0，仍记录一条长度为0的记录
+ * 
+ * @invariant 一个block总是包含每一个记录完整的头部，而不会只包含一部分。
+ * 
+ * @param slice 
+ * @return Status 
+ */
 Status Writer::AddRecord(const Slice& slice) {
   const char* ptr = slice.data();
   size_t left = slice.size();
@@ -39,13 +52,14 @@ Status Writer::AddRecord(const Slice& slice) {
   // is empty, we still want to iterate once to emit a single
   // zero-length record
   Status s;
-  bool begin = true;
+  bool begin = true;   // 表明是第一个fragment
   do {
-    const int leftover = kBlockSize - block_offset_;
+    const int leftover = kBlockSize - block_offset_;  // 当前块剩余的空间
     assert(leftover >= 0);
-    if (leftover < kHeaderSize) {
+    // 如果存不下头部，则剩余的空间填充0，跳到下一个块，重置block_offset_为0
+    if (leftover < kHeaderSize) { 
       // Switch to a new block
-      if (leftover > 0) {
+      if (leftover > 0) {    
         // Fill the trailer (literal below relies on kHeaderSize being 7)
         static_assert(kHeaderSize == 7, "");
         dest_->Append(Slice("\x00\x00\x00\x00\x00\x00", leftover));
@@ -59,6 +73,7 @@ Status Writer::AddRecord(const Slice& slice) {
     const size_t avail = kBlockSize - block_offset_ - kHeaderSize;
     const size_t fragment_length = (left < avail) ? left : avail;
 
+    // 确定当前分片的类型
     RecordType type;
     const bool end = (left == fragment_length);
     if (begin && end) {
@@ -79,6 +94,14 @@ Status Writer::AddRecord(const Slice& slice) {
   return s;
 }
 
+/**
+ * @brief 将一个记录分片写到文件中
+ * 
+ * @param t 
+ * @param ptr 
+ * @param length 
+ * @return Status 
+ */
 Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
                                   size_t length) {
   assert(length <= 0xffff);  // Must fit in two bytes

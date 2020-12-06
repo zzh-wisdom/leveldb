@@ -15,6 +15,14 @@ namespace log {
 
 Reader::Reporter::~Reporter() = default;
 
+/**
+ * @brief Construct a new Reader:: Reader object
+ * 
+ * @param file   需要保证生命周期不短于Reader
+ * @param reporter  non-null，需要保证生命周期不短于Reader
+ * @param checksum 若为true，需要确保检查和可用
+ * @param initial_offset 开始读记录的偏移
+ */
 Reader::Reader(SequentialFile* file, Reporter* reporter, bool checksum,
                uint64_t initial_offset)
     : file_(file),
@@ -30,9 +38,15 @@ Reader::Reader(SequentialFile* file, Reporter* reporter, bool checksum,
 
 Reader::~Reader() { delete[] backing_store_; }
 
+/**
+ * @brief 跳过在initial_offset之前的block
+ * 
+ * @return true 
+ * @return false 
+ */
 bool Reader::SkipToInitialBlock() {
   const size_t offset_in_block = initial_offset_ % kBlockSize;
-  uint64_t block_start_location = initial_offset_ - offset_in_block;
+  uint64_t block_start_location = initial_offset_ - offset_in_block; // initial_offset_所在的block的偏移
 
   // Don't search a block if we'd be in the trailer
   if (offset_in_block > kBlockSize - 6) {
@@ -42,6 +56,7 @@ bool Reader::SkipToInitialBlock() {
   end_of_buffer_offset_ = block_start_location;
 
   // Skip to start of first block that can contain the initial record
+  // 将文件跳到该块位置
   if (block_start_location > 0) {
     Status skip_status = file_->Skip(block_start_location);
     if (!skip_status.ok()) {
@@ -53,6 +68,14 @@ bool Reader::SkipToInitialBlock() {
   return true;
 }
 
+/**
+ * @brief 
+ * 
+ * @param record 
+ * @param scratch 
+ * @return true 
+ * @return false  遇到文件尾部
+ */
 bool Reader::ReadRecord(Slice* record, std::string* scratch) {
   if (last_record_offset_ < initial_offset_) {
     if (!SkipToInitialBlock()) {
@@ -62,9 +85,11 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
 
   scratch->clear();
   record->clear();
+  // 当前是否在fragment内，也就是遇到了FIRST类型的record
   bool in_fragmented_record = false;
   // Record offset of the logical record that we're reading
   // 0 is a dummy value to make compilers happy
+  // 我们正在读取的逻辑记录的偏移
   uint64_t prospective_record_offset = 0;
 
   Slice fragment;
@@ -74,10 +99,12 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
     // ReadPhysicalRecord may have only had an empty trailer remaining in its
     // internal buffer. Calculate the offset of the next physical record now
     // that it has returned, properly accounting for its header size.
+    // ReadPhysicalRecord的内部缓冲区中可能只剩下一个空的trailer。 
+    // 计算下一条物理记录返回后的偏移量，并正确考虑其标头大小。
     uint64_t physical_record_offset =
-        end_of_buffer_offset_ - buffer_.size() - kHeaderSize - fragment.size();
+        end_of_buffer_offset_ - buffer_.size() - kHeaderSize - fragment.size();  // 当前fragment的起始物理偏移
 
-    if (resyncing_) {
+    if (resyncing_) {   // 此时需要跳过在initial_offset_偏移之前的记录
       if (record_type == kMiddleType) {
         continue;
       } else if (record_type == kLastType) {
@@ -90,11 +117,13 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
 
     switch (record_type) {
       case kFullType:
-        if (in_fragmented_record) {
+        if (in_fragmented_record) { // 分片的Record不应该遇到该类型，报告错误
           // Handle bug in earlier versions of log::Writer where
           // it could emit an empty kFirstType record at the tail end
           // of a block followed by a kFullType or kFirstType record
           // at the beginning of the next block.
+          // 处理log :: Writer早期版本中的错误，在该错误中它可能会在块的末尾发出空的kFirstType记录，
+          // 然后在下一个块的开头发出kFullType或kFirstType记录。
           if (!scratch->empty()) {
             ReportCorruption(scratch->size(), "partial record without end(1)");
           }
@@ -106,7 +135,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
         return true;
 
       case kFirstType:
-        if (in_fragmented_record) {
+        if (in_fragmented_record) {  // 分片的Record不应该遇到该类型，报告错误，
           // Handle bug in earlier versions of log::Writer where
           // it could emit an empty kFirstType record at the tail end
           // of a block followed by a kFullType or kFirstType record
@@ -120,7 +149,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
         in_fragmented_record = true;
         break;
 
-      case kMiddleType:
+      case kMiddleType:  // 对于分片的Record，需要scratch聚集数据
         if (!in_fragmented_record) {
           ReportCorruption(fragment.size(),
                            "missing start of fragmented record(1)");
@@ -146,6 +175,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
           // This can be caused by the writer dying immediately after
           // writing a physical record but before completing the next; don't
           // treat it as a corruption, just ignore the entire logical record.
+          // 可能是写者中途宕机
           scratch->clear();
         }
         return false;
@@ -173,6 +203,11 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
   return false;
 }
 
+/**
+ * @brief 最近一次读取的Record的偏移
+ * 
+ * @return uint64_t 
+ */
 uint64_t Reader::LastRecordOffset() { return last_record_offset_; }
 
 void Reader::ReportCorruption(uint64_t bytes, const char* reason) {
@@ -181,13 +216,24 @@ void Reader::ReportCorruption(uint64_t bytes, const char* reason) {
 
 void Reader::ReportDrop(uint64_t bytes, const Status& reason) {
   if (reporter_ != nullptr &&
-      end_of_buffer_offset_ - buffer_.size() - bytes >= initial_offset_) {
+      end_of_buffer_offset_ - buffer_.size() - bytes >= initial_offset_) {  // 判断是否在 initial_offset_ 之后
     reporter_->Corruption(static_cast<size_t>(bytes), reason);
   }
 }
 
+/**
+ * @brief 实际从文件中读取记录分片的函数
+ * 
+ * 读的过程中，发现损坏（如校验和不等），则是按照block的单位丢弃。
+ * 
+ * @param result 
+ * @return unsigned int 
+ */
 unsigned int Reader::ReadPhysicalRecord(Slice* result) {
   while (true) {
+
+    // buffer_.size()小于kHeaderSize的情况，
+    // 从文件中读取新的块，并判断是否到了文件末尾
     if (buffer_.size() < kHeaderSize) {
       if (!eof_) {
         // Last read was a full read, so this is a trailer to skip
@@ -208,6 +254,8 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
         // end of the file, which can be caused by the writer crashing in the
         // middle of writing the header. Instead of considering this an error,
         // just report EOF.
+        // 请注意，如果buffer_为非空，则文件结尾处的头将被截断，这可能是由于写入器在写入标头的过程中崩溃而导致的。 
+        // 而不是将其视为错误，只需报告EOF。
         buffer_.clear();
         return kEof;
       }
@@ -229,6 +277,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
       // If the end of the file has been reached without reading |length| bytes
       // of payload, assume the writer died in the middle of writing the record.
       // Don't report a corruption.
+      // 有可能是Writer写一半崩溃，所以不需要报告错误
       return kEof;
     }
 
@@ -236,6 +285,8 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
       // Skip zero length record without reporting any drops since
       // such records are produced by the mmap based writing code in
       // env_posix.cc that preallocates file regions.
+      // 跳过零长度记录而不报告任何drops，
+      // 因为此类记录是由env_posix.cc中基于mmap的编写代码产生的，该代码预先分配了文件区域。
       buffer_.clear();
       return kBadRecord;
     }
@@ -249,6 +300,8 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
         // been corrupted and if we trust it, we could find some
         // fragment of a real log record that just happens to look
         // like a valid log record.
+        // 删除缓冲区的其余部分，因为“长度”本身可能已损坏，
+        // 如果我们信任它，我们可能会发现真实日志记录的某些片段，而该片段恰好看起来像是有效的日志记录。
         size_t drop_size = buffer_.size();
         buffer_.clear();
         ReportCorruption(drop_size, "checksum mismatch");
@@ -259,6 +312,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
     buffer_.remove_prefix(kHeaderSize + length);
 
     // Skip physical record that started before initial_offset_
+    // 在initial_offset_偏移之前的记录作废
     if (end_of_buffer_offset_ - buffer_.size() - kHeaderSize - length <
         initial_offset_) {
       result->clear();

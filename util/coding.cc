@@ -74,6 +74,12 @@ void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
   dst->append(value.data(), value.size());
 }
 
+/**
+ * @brief 计算Varint64编码需要的字节数
+ * 
+ * @param v 
+ * @return int 
+ */
 int VarintLength(uint64_t v) {
   int len = 1;
   while (v >= 128) {
