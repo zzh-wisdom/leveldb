@@ -213,7 +213,7 @@ static void ReleaseBlock(void* arg, void* h) {
  * Convert an index iterator value (i.e., an encoded BlockHandle)
  * into an iterator over the contents of the corresponding block.
  * 
- * 这其中还用到了LRUCache。
+ * 这其中还用到了LRUCache（在options中）。
  * 
  * 1. 从参数中解析出BlockHandle对象，其中arg就是Table对象，index_value存储的是BlockHandle对象，读取Block的索引。
  * 2. 根据block handle，首先尝试从cache中直接取出block，不在cache中则调用ReadBlock从文件读取，读取成功后，根据option尝试将block加入到LRU cache中，
@@ -222,7 +222,7 @@ static void ReleaseBlock(void* arg, void* h) {
  * 
  * @param arg 
  * @param options 
- * @param index_value  一个handle
+ * @param index_value  一个handle，根据该参数从table中读取block
  * @return Iterator* 
  */
 Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
@@ -294,7 +294,7 @@ Iterator* Table::NewIterator(const ReadOptions& options) const {
 }
 
 /**
- * @brief 内部查找（相等）key的方法，使用了filter
+ * @brief 查找InternalKey的方法，使用了filter
  * 
  * 私有函数。在找到数据后，就调用传入的函数指针handle_result执行调用者的自定义处理逻辑，并且TableCache可能会做缓存。
  * 
@@ -304,7 +304,7 @@ Iterator* Table::NewIterator(const ReadOptions& options) const {
  * 4. 最后返回结果，删除临时迭代器。
  * 
  * @param options 
- * @param k  查找的key
+ * @param k  查找的InternalKey
  * @param arg 
  * @param handle_result 
  * @return Status 

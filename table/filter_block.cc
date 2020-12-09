@@ -134,8 +134,8 @@ bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
   uint64_t index = block_offset >> base_lg_;
   if (index < num_) {
     uint32_t start = DecodeFixed32(offset_ + index * 4);
-    /// 特别地，最后一个filter数据的limit其实就是偏移数组的开始偏移
     uint32_t limit = DecodeFixed32(offset_ + index * 4 + 4);
+    // 特别地，最后一个filter数据的limit其实就是偏移数组的开始偏移（offset_）
     if (start <= limit && limit <= static_cast<size_t>(offset_ - data_)) {
       Slice filter = Slice(data_ + start, limit - start);
       return policy_->KeyMayMatch(key, filter);

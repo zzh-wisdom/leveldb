@@ -154,6 +154,8 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
  * 3. 在Table中查找key（InternalGet）
  * 4. cache_->Release(handle);
  * 
+ * 注意：这里返回的Status只能只是查找的过程中是否出现错误，而是否找到，需要根据参数arg带回的结果来决定
+ * 
  * @param options 
  * @param file_number SSTable文件编号
  * @param file_size SSTable文件大小

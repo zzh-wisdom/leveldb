@@ -78,6 +78,14 @@ Status WriteStringToFileSync(Env* env, const Slice& data,
   return DoWriteStringToFile(env, data, fname, true);
 }
 
+/**
+ * @brief 将文件的全部内容读取到data（string）中
+ * 
+ * @param env 
+ * @param fname 
+ * @param data 
+ * @return Status 
+ */
 Status ReadFileToString(Env* env, const std::string& fname, std::string* data) {
   data->clear();
   SequentialFile* file;

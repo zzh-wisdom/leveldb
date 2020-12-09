@@ -69,6 +69,14 @@ void PutVarint64(std::string* dst, uint64_t v) {
   dst->append(buf, ptr - buf);
 }
 
+/**
+ * @brief 先添加长度，再添加数据
+ * 
+ * 长度：Varint32
+ * 
+ * @param dst 
+ * @param value 
+ */
 void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
   PutVarint32(dst, value.size());
   dst->append(value.data(), value.size());
@@ -168,6 +176,18 @@ const char* GetLengthPrefixedSlice(const char* p, const char* limit,
   return p + len;
 }
 
+/**
+ * @brief 获取有长度前缀的Slice
+ * 
+ * 先获取长度
+ * 得到Slice
+ * 从input删除解码出来的数据
+ * 
+ * @param input 
+ * @param result 
+ * @return true 
+ * @return false 
+ */
 bool GetLengthPrefixedSlice(Slice* input, Slice* result) {
   uint32_t len;
   if (GetVarint32(input, &len) && input->size() >= len) {

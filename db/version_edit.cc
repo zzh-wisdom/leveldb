@@ -38,6 +38,14 @@ void VersionEdit::Clear() {
   new_files_.clear();
 }
 
+/**
+ * @brief 将VersionEdit编码
+ * 
+ * 格式：
+ * tag+数值（均是Varint）
+ * 
+ * @param dst 
+ */
 void VersionEdit::EncodeTo(std::string* dst) const {
   if (has_comparator_) {
     PutVarint32(dst, kComparator);

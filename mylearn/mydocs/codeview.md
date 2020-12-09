@@ -107,6 +107,16 @@ entry组成：
 
 
 
+## 版本控制
+
+VersionSet是所有Version的集合，这是个version的管理机构。
+
+VersionEdit记录了Version之间的变化，相当于delta增量，表示又增加了多少文件，删除了文件。也就是说：Version0 + VersionEdit --> Version1。
+
+每次文件有变动时，leveldb就把变动记录到一个VersionEdit变量中，然后通过VersionEdit把变动应用到current version上，并把current version的快照，也就是db元信息保存到MANIFEST文件中。
+
+另外，MANIFEST文件组织是以VersionEdit的形式写入的，它本身是一个**log文件格式**，采用log::Writer/Reader的方式读写，一个VersionEdit就是一条log record。
+
 
 
 

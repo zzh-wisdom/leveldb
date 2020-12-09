@@ -57,61 +57,86 @@ bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
                            const Slice* smallest_user_key,
                            const Slice* largest_user_key);
 
+/**
+ * @brief Version
+ * 
+ * Version通过Version* prev和*next指针构成了一个Version双向循环链表.
+ * 表头指针则在VersionSet中（初始都指向自己）。
+ * 
+ * 所有Version公用vset_中的table cache
+ * 
+ * 当Get操作直接搜寻memtable没有命中时，就需要调用Version::Get()函数从磁盘load数据文件并查找。
+ * 如果此次Get不止seek了一个文件，就记录第一个文件到stat并返回。其后leveldb就会调用UpdateStats(stat)。
+ * 
+ * Stat表明在指定key range查找key时，都要先seek此文件，才能在后续的sstable文件中找到key。
+ * 函数是将stat记录的sstable文件的allowed_seeks减1，减到0就执行compaction。
+ * 也就是说如果文件被seek的次数超过了限制，表明读取效率已经很低，需要执行compaction了。
+ * 所以说allowed_seeks是对compaction流程的有一个优化。
+ * 
+ */
 class Version {
  public:
-  // Lookup the value for key.  If found, store it in *val and
-  // return OK.  Else return a non-OK status.  Fills *stats.
-  // REQUIRES: lock is not held
   struct GetStats {
     FileMetaData* seek_file;
     int seek_file_level;
   };
 
-  // Append to *iters a sequence of iterators that will
-  // yield the contents of this Version when merged together.
-  // REQUIRES: This version has been saved (see VersionSet::SaveTo)
+  /// Append to *iters a sequence of iterators that will
+  /// yield the contents of this Version when merged together.
+  /// @pre REQUIRES: This version has been saved (see VersionSet::SaveTo)
   void AddIterators(const ReadOptions&, std::vector<Iterator*>* iters);
 
+  /// Lookup the value for key.  If found, store it in *val and
+  /// return OK.  Else return a non-OK status.  Fills *stats.
+  /// @pre REQUIRES: lock is not held
   Status Get(const ReadOptions&, const LookupKey& key, std::string* val,
              GetStats* stats);
 
-  // Adds "stats" into the current state.  Returns true if a new
-  // compaction may need to be triggered, false otherwise.
-  // REQUIRES: lock is held
+  /// Adds "stats" into the current state.  Returns true if a new
+  /// compaction may need to be triggered, false otherwise.
+  /// 该函数会更新file_to_compact_，file_to_compact_level_。
+  /// @pre REQUIRES: lock is held
   bool UpdateStats(const GetStats& stats);
 
-  // Record a sample of bytes read at the specified internal key.
-  // Samples are taken approximately once every config::kReadBytesPeriod
-  // bytes.  Returns true if a new compaction may need to be triggered.
-  // REQUIRES: lock is held
+  /// Record a sample of bytes read at the specified internal key.
+  /// Samples are taken approximately once every config::kReadBytesPeriod
+  /// bytes.  Returns true if a new compaction may need to be triggered.
+  /// 该抽样是为了提高compaction的频率，提前发现需要compaction的l0 sstable
+  /// @pre REQUIRES: lock is held
   bool RecordReadSample(Slice key);
 
-  // Reference count management (so Versions do not disappear out from
-  // under live iterators)
+  /// Reference count management (so Versions do not disappear out from
+  /// under live iterators)
   void Ref();
+  /// 计数等于0则释放this类
   void Unref();
 
+  /// 在指定level中找出和[begin, end]有重合的sstable文件
+  /// 这个重叠与常规的理解不一样，查找时如果一个文件与[begin, end]有重叠，则要根据的file的(min和max)key范围扩展范围，
   void GetOverlappingInputs(
       int level,
       const InternalKey* begin,  // nullptr means before all keys
       const InternalKey* end,    // nullptr means after all keys
       std::vector<FileMetaData*>* inputs);
 
-  // Returns true iff some file in the specified level overlaps
-  // some part of [*smallest_user_key,*largest_user_key].
-  // smallest_user_key==nullptr represents a key smaller than all the DB's keys.
-  // largest_user_key==nullptr represents a key largest than all the DB's keys.
+  /// Returns true iff some file in the specified level overlaps(重叠)
+  /// some part of [*smallest_user_key,*largest_user_key].
+  /// smallest_user_key==nullptr represents a key smaller than all the DB's keys.
+  /// largest_user_key==nullptr represents a key largest than all the DB's keys.
+  /// 检查指定level文件是否与范围[*smallest_user_key,*largest_user_key]有重合
   bool OverlapInLevel(int level, const Slice* smallest_user_key,
                       const Slice* largest_user_key);
 
-  // Return the level at which we should place a new memtable compaction
-  // result that covers the range [smallest_user_key,largest_user_key].
+  /// Return the level at which we should place a new memtable compaction
+  /// result that covers the range [smallest_user_key,largest_user_key].
+  /// 函数返回我们应该在哪个level上放置新的memtable compaction，
+  /// 这个compaction覆盖了范围[smallest_user_key,largest_user_key]。
   int PickLevelForMemTableOutput(const Slice& smallest_user_key,
                                  const Slice& largest_user_key);
-
+  /// 指定level的sstable个数
   int NumFiles(int level) const { return files_[level].size(); }
 
-  // Return a human readable string that describes this version's contents.
+  /// Return a human readable string that describes this version's contents.
   std::string DebugString() const;
 
  private:
@@ -146,24 +171,32 @@ class Version {
                           bool (*func)(void*, int, FileMetaData*));
 
   VersionSet* vset_;  /// VersionSet to which this Version belongs
-  Version* next_;     // Next version in linked list
-  Version* prev_;     // Previous version in linked list
-  int refs_;          // Number of live refs to this version
+  Version* next_;     /// Next version in linked list
+  Version* prev_;     /// Previous version in linked list
+  int refs_;          /// Number of live refs to this version
 
-  /// List of files per level
+  /// List of files per level，sstable文件列表
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
-  // Next file to compact based on seek stats.
+  /// Next file to compact based on seek stats. 下一个要compact的文件
   FileMetaData* file_to_compact_;
   int file_to_compact_level_;
 
-  // Level that should be compacted next and its compaction score.
-  // Score < 1 means compaction is not strictly needed.  These fields
-  // are initialized by Finalize().
+  /// Level that should be compacted next and its compaction score.
+  /// Score < 1 means compaction is not strictly needed.  These fields
+  /// are initialized by Finalize().
   double compaction_score_;
   int compaction_level_;
 };
 
+/**
+ * @brief VersionSet
+ * 
+ * VersionSet是所有Version的集合，这是个version的管理机构。
+ * 
+ * VersionSet会使用到TableCache，这个是调用者传入的。TableCache用于Get k/v操作。
+ * 
+ */
 class VersionSet {
  public:
   VersionSet(const std::string& dbname, const Options* options,
@@ -173,58 +206,74 @@ class VersionSet {
 
   ~VersionSet();
 
-  // Apply *edit to the current version to form a new descriptor that
-  // is both saved to persistent state and installed as the new
-  // current version.  Will release *mu while actually writing to the file.
-  // REQUIRES: *mu is held on entry.
-  // REQUIRES: no other thread concurrently calls LogAndApply()
+  /// Apply *edit to the current version to form a new descriptor that
+  /// is both saved to persistent state and installed as the new
+  /// current version.  Will release *mu while actually writing to the file.
+  /// 在current version上应用指定的VersionEdit，生成新的MANIFEST信息，保存到磁盘上，并用作current version。
+  /// 写文件的期间会解锁🔐
+  /// REQUIRES: *mu is held on entry.
+  /// REQUIRES: no other thread concurrently calls LogAndApply()
   Status LogAndApply(VersionEdit* edit, port::Mutex* mu)
       EXCLUSIVE_LOCKS_REQUIRED(mu);
 
-  // Recover the last saved descriptor from persistent storage.
+  /// Recover the last saved descriptor from persistent storage.
+  /// 恢复数据，从磁盘恢复最后保存的元信息
+  /// @param save_manifest 表示恢复后是否需要保存manifest元数据文件
   Status Recover(bool* save_manifest);
 
-  // Return the current version.
+  /// Return the current version.
   Version* current() const { return current_; }
 
-  // Return the current manifest file number
+  /// Return the current manifest file number
+  /// 返回当前元信息的文件（manifest）编号
   uint64_t ManifestFileNumber() const { return manifest_file_number_; }
 
-  // Allocate and return a new file number
+  /// Allocate and return a new file number
+  /// next_file_number_++
   uint64_t NewFileNumber() { return next_file_number_++; }
 
-  // Arrange to reuse "file_number" unless a newer file number has
-  // already been allocated.
-  // REQUIRES: "file_number" was returned by a call to NewFileNumber().
+  /// Arrange to reuse "file_number" unless a newer file number has
+  /// already been allocated.
+  /// 除非已经分配了新的文件编号，否则请重新使用“ file_number”。
+  /// @file_number必须是最后分配的那个
+  /// 重用是通过将next_file_number_回退1来实现的
+  /// REQUIRES: "file_number" was returned by a call to NewFileNumber().
   void ReuseFileNumber(uint64_t file_number) {
     if (next_file_number_ == file_number + 1) {
       next_file_number_ = file_number;
     }
   }
 
-  // Return the number of Table files at the specified level.
+  /// Return the number of Table files at the specified level.
+  /// 返回指定level的table文件个数
   int NumLevelFiles(int level) const;
 
-  // Return the combined file size of all files at the specified level.
+  /// Return the combined file size of all files at the specified level.
+  /// 返回指定level中所有sstable文件大小的和
   int64_t NumLevelBytes(int level) const;
 
-  // Return the last sequence number.
+  /// Return the last sequence number.
   uint64_t LastSequence() const { return last_sequence_; }
 
-  // Set the last sequence number to s.
+  /// Set the last sequence number to s.
+  /// 不能回退
   void SetLastSequence(uint64_t s) {
     assert(s >= last_sequence_);
     last_sequence_ = s;
   }
 
-  // Mark the specified file number as used.
+  /// Mark the specified file number as used.
+  /// 标记指定的文件编号已经被使用了
+  /// 通过设置 next_file_number_ = number + 1 来实现
   void MarkFileNumberUsed(uint64_t number);
 
-  // Return the current log file number.
+  /// Return the current log file number.
+  /// 返回当前log文件编号
   uint64_t LogNumber() const { return log_number_; }
 
-  // Return the log file number for the log file that is currently
-  // being compacted, or zero if there is no such log file.
+  /// Return the log file number for the log file that is currently
+  /// being compacted, or zero if there is no such log file.
+  /// 返回正在compact（即上一个写满）的log文件编号，如果没有返回0
   uint64_t PrevLogNumber() const { return prev_log_number_; }
 
   // Pick level and inputs for a new compaction.
@@ -240,8 +289,10 @@ class VersionSet {
   Compaction* CompactRange(int level, const InternalKey* begin,
                            const InternalKey* end);
 
-  // Return the maximum overlapping data (in bytes) at next level for any
-  // file at a level >= 1.
+  /// Return the maximum overlapping data (in bytes) at next level for any
+  /// file at a level >= 1.
+  /// 对于所有level>0，遍历文件，找到单个文件和下一层所有文件的重叠数据的最大值(in bytes)
+  /// 这个就是Version:: GetOverlappingInputs()函数的简单应用
   int64_t MaxNextLevelOverlappingBytes();
 
   // Create an iterator that reads over the compaction inputs for "*c".
@@ -254,8 +305,10 @@ class VersionSet {
     return (v->compaction_score_ >= 1) || (v->file_to_compact_ != nullptr);
   }
 
-  // Add all files listed in any live version to *live.
-  // May also mutate some internal state.
+  /// Add all files listed in any live version to *live.
+  /// May also mutate some internal state.
+  /// 获取函数，把所有version的所有level的文件编号加入到@live中
+  /// 也可能会改变某些内部状态。
   void AddLiveFiles(std::set<uint64_t>* live);
 
   // Return the approximate offset in the database of the data for
@@ -267,6 +320,7 @@ class VersionSet {
   struct LevelSummaryStorage {
     char buffer[100];
   };
+  /// 返回一个可读的单行信息——每个level的文件数，保存在*scratch中
   const char* LevelSummary(LevelSummaryStorage* scratch) const;
 
  private:
@@ -293,25 +347,30 @@ class VersionSet {
 
   void AppendVersion(Version* v);
 
-  Env* const env_;
+  // 第一组，直接来自于DBImple，构造函数传入
+  Env* const env_;    /// 操作系统封装，平台相关的环境
   const std::string dbname_;
   const Options* const options_;
-  TableCache* const table_cache_;
-  const InternalKeyComparator icmp_;
-  uint64_t next_file_number_;
-  uint64_t manifest_file_number_;
-  uint64_t last_sequence_;
-  uint64_t log_number_;
-  uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted
+  TableCache* const table_cache_; /// 指向sst文件的cache对象；
+  const InternalKeyComparator icmp_;  /// InternalKey比较器；
+  // 第二组，db元信息相关
+  uint64_t next_file_number_;  /// 下一个文件编号，文件编号计数器；初始为2
+  uint64_t manifest_file_number_;   /// manifest文件编号，初始为0
+  uint64_t last_sequence_; /// 上一个序列号（快照就是靠它实现的），初始为0
+  uint64_t log_number_;  /// log 文件编号，初始为0
+  uint64_t prev_log_number_;  /// 0 or backing store for memtable being compacted，初始为0
 
-  // Opened lazily
-  WritableFile* descriptor_file_;
-  log::Writer* descriptor_log_;
-  Version dummy_versions_;  // Head of circular doubly-linked list of versions.
-  Version* current_;        // == dummy_versions_.prev_
+  // 第三组，menifest文件相关
+  /// Opened lazily
+  WritableFile* descriptor_file_; /// 指向可写的manifest文件（log文件格式）；
+  log::Writer* descriptor_log_;   /// 指向log writer对象
+  // 第四组，版本管理
+  Version dummy_versions_;  /// Head of circular doubly-linked list of versions. 双向链表的head，初始为以this为参数构造的Version
+  Version* current_;        /// == dummy_versions_.prev_  当前版本
 
-  // Per-level key at which the next compaction at that level should start.
-  // Either an empty string, or a valid InternalKey.
+  /// Per-level key at which the next compaction at that level should start.
+  /// Either an empty string, or a valid InternalKey.
+  /// level下一次compaction的开始key，空字符串或者合法的InternalKey
   std::string compact_pointer_[config::kNumLevels];
 };
 
