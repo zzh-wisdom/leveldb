@@ -36,6 +36,13 @@ namespace {
 // combines multiple entries for the same userkey found in the DB
 // representation into a single entry while accounting for sequence
 // numbers, deletion markers, overwrites, etc.
+/**
+ * @brief DBIter
+ * 
+ * Leveldb数据库的MemTable和sstable文件的存储格式都是(user key, seq, type) => uservalue。
+ * DBIter把同一个userkey在DB中的多条记录合并为一条，综合考虑了userkey的序号、删除标记、和写覆盖等等因素。
+ * 
+ */
 class DBIter : public Iterator {
  public:
   // Which direction is the iterator currently moving?
@@ -61,6 +68,15 @@ class DBIter : public Iterator {
 
   ~DBIter() override { delete iter_; }
   bool Valid() const override { return valid_; }
+  /**
+   * @brief key
+   * 
+   * 返回user key
+   * kForward： 从iter中得到
+   * kReverse： saved_key_
+   * 
+   * @return Slice 
+   */
   Slice key() const override {
     assert(valid_);
     return (direction_ == kForward) ? ExtractUserKey(iter_->key()) : saved_key_;
@@ -88,10 +104,20 @@ class DBIter : public Iterator {
   void FindPrevUserEntry();
   bool ParseKey(ParsedInternalKey* key);
 
+  /**
+   * @brief 将k assign到dst
+   * 
+   * @param k 
+   * @param dst 
+   */
   inline void SaveKey(const Slice& k, std::string* dst) {
     dst->assign(k.data(), k.size());
   }
 
+  /**
+   * @brief 清空saved_value_
+   * 
+   */
   inline void ClearSavedValue() {
     if (saved_value_.capacity() > 1048576) {
       std::string empty;
@@ -101,29 +127,38 @@ class DBIter : public Iterator {
     }
   }
 
-  // Picks the number of bytes that can be read until a compaction is scheduled.
+  /// Picks the number of bytes that can be read until a compaction is scheduled.
+  /// 选择在计划压缩之前可以读取的字节数。
+  /// 调用Uniform函数生成[0...2 * config::kReadBytesPeriod]范围的随机数
   size_t RandomCompactionPeriod() {
     return rnd_.Uniform(2 * config::kReadBytesPeriod);
   }
 
   DBImpl* db_;
   const Comparator* const user_comparator_;
-  Iterator* const iter_;
+  Iterator* const iter_;  /// merge iter
   SequenceNumber const sequence_;
   Status status_;
-  std::string saved_key_;    // == current key when direction_==kReverse
-  std::string saved_value_;  // == current raw value when direction_==kReverse
-  Direction direction_;
-  bool valid_;
-  Random rnd_;
-  size_t bytes_until_read_sampling_;
+  std::string saved_key_;    /// == current key when direction_==kReverse，否则为上一个被跳过的key（deletion或者正常）
+  std::string saved_value_;  /// == current raw value when direction_==kReverse
+  Direction direction_;  //   变成kForward，需要清空saved_key_ 和 saved_value_
+  bool valid_; 
+  Random rnd_;  /// 使用传入的种子seed进行构造
+  size_t bytes_until_read_sampling_;  /// +rnd_.Uniform(2 * config::kReadBytesPeriod);
 };
 
+/**
+ * @brief 根据bytes_until_read_sampling_决定是否进行抽样读，然后将当前iter的key解码到ikey
+ * 
+ * @param ikey 
+ * @return true 
+ * @return false 
+ */
 inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {
   Slice k = iter_->key();
 
   size_t bytes_read = k.size() + iter_->value().size();
-  while (bytes_until_read_sampling_ < bytes_read) {
+  while (bytes_until_read_sampling_ < bytes_read) {  ///@todo 这里读这么多次不会降低scan的效率吗？虽然有缓存，内存读比较快，而且只对大的key value进行抽样读
     bytes_until_read_sampling_ += RandomCompactionPeriod();
     db_->RecordReadSample(k);
   }
@@ -138,6 +173,10 @@ inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {
   }
 }
 
+/**
+ * @brief Next
+ * 
+ */
 void DBIter::Next() {
   assert(valid_);
 
@@ -146,7 +185,8 @@ void DBIter::Next() {
     // iter_ is pointing just before the entries for this->key(),
     // so advance into the range of entries for this->key() and then
     // use the normal skipping code below.
-    if (!iter_->Valid()) {
+    // iter_指向this-> key（）的条目之前，因此请进入this-> key（）的条目范围，然后使用下面的常规跳过代码。
+    if (!iter_->Valid()) {  // 此时意味着当前迭代器指到比第一个key还小的地方，prev函数造成的
       iter_->SeekToFirst();
     } else {
       iter_->Next();
@@ -174,6 +214,12 @@ void DBIter::Next() {
   FindNextUserEntry(true, &saved_key_);
 }
 
+/**
+ * @brief 循环跳过下一个delete的记录，也跳过和当前key的user_key相同的key，直到遇到下一个kValueType的记录。
+ * 
+ * @param skipping 
+ * @param skip 保存跳过的deletion key
+ */
 void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
   // Loop until we hit an acceptable entry to yield
   assert(iter_->Valid());
@@ -190,9 +236,9 @@ void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
           break;
         case kTypeValue:
           if (skipping &&
-              user_comparator_->Compare(ikey.user_key, *skip) <= 0) {
+              user_comparator_->Compare(ikey.user_key, *skip) <= 0) { // 按道理小于的情况不会出现的，等于则说明被覆盖，因为seq是按照降序排的
             // Entry hidden
-          } else {
+          } else {  // 找到大于的key且不是deletion，则成功
             valid_ = true;
             saved_key_.clear();
             return;
@@ -206,6 +252,12 @@ void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
   valid_ = false;
 }
 
+/**
+ * @brief Prev
+ * 
+ * 往回遍历的时候，iter_指向current key的前一个
+ * 
+ */
 void DBIter::Prev() {
   assert(valid_);
 
@@ -223,7 +275,7 @@ void DBIter::Prev() {
         return;
       }
       if (user_comparator_->Compare(ExtractUserKey(iter_->key()), saved_key_) <
-          0) {
+          0) {  // 若和当前key的user_key部分相等，还需要继续跳过，需要找到下一个不同的user_key
         break;
       }
     }
@@ -232,7 +284,10 @@ void DBIter::Prev() {
 
   FindPrevUserEntry();
 }
-
+/**
+ * @brief 循环跳过下一个delete的记录，直到遇到kValueType的记录。
+ * 
+ */
 void DBIter::FindPrevUserEntry() {
   assert(direction_ == kReverse);
 
@@ -242,17 +297,17 @@ void DBIter::FindPrevUserEntry() {
       ParsedInternalKey ikey;
       if (ParseKey(&ikey) && ikey.sequence <= sequence_) {
         if ((value_type != kTypeDeletion) &&
-            user_comparator_->Compare(ikey.user_key, saved_key_) < 0) {
+            user_comparator_->Compare(ikey.user_key, saved_key_) < 0) {  // 第一次循环不会落入这里
           // We encountered a non-deleted value in entries for previous keys,
-          break;
+          break; // 我们遇到了前一个key的一个未被删除的entry，说明当前保存的key必定没有被覆盖，是有效的，跳出循环
         }
         value_type = ikey.type;
         if (value_type == kTypeDeletion) {
-          saved_key_.clear();
+          saved_key_.clear();  // 此时的key标记为kTypeDeletion，value为null
           ClearSavedValue();
         } else {
           Slice raw_value = iter_->value();
-          if (saved_value_.capacity() > raw_value.size() + 1048576) {
+          if (saved_value_.capacity() > raw_value.size() + 1048576) { // 1MB
             std::string empty;
             swap(empty, saved_value_);
           }
@@ -271,10 +326,15 @@ void DBIter::FindPrevUserEntry() {
     ClearSavedValue();
     direction_ = kForward;
   } else {
-    valid_ = true;
+    valid_ = true;  // 这里有可能导致 iter_->Valid()为false，而valid_为true，此时迭代器指到比第一个key还小的地方
   }
 }
 
+/**
+ * @brief seek
+ * 
+ * @param target 
+ */
 void DBIter::Seek(const Slice& target) {
   direction_ = kForward;
   ClearSavedValue();
@@ -309,6 +369,18 @@ void DBIter::SeekToLast() {
 
 }  // anonymous namespace
 
+/**
+ * @brief NewDBIterator
+ * 
+ * 直接调用new DBIter函数
+ * 
+ * @param db 
+ * @param user_key_comparator 
+ * @param internal_iter 
+ * @param sequence 
+ * @param seed 
+ * @return Iterator* 
+ */
 Iterator* NewDBIterator(DBImpl* db, const Comparator* user_key_comparator,
                         Iterator* internal_iter, SequenceNumber sequence,
                         uint32_t seed) {

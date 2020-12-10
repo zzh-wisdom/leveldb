@@ -40,6 +40,13 @@ std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
   return MakeFileName(dbname, number, "sst");
 }
 
+/**
+ * @brief 构造MANIFEST文件名
+ * 
+ * @param dbname 
+ * @param number 
+ * @return std::string 
+ */
 std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   char buf[100];
@@ -54,16 +61,25 @@ std::string CurrentFileName(const std::string& dbname) {
 
 std::string LockFileName(const std::string& dbname) { return dbname + "/LOCK"; }
 
+/**
+ * @brief 构建临时文件名称 dbname/6位数字.dbtmp
+ * 
+ * @param dbname 
+ * @param number 
+ * @return std::string 
+ */
 std::string TempFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   return MakeFileName(dbname, number, "dbtmp");
 }
 
+/// dbname/LOG
 std::string InfoLogFileName(const std::string& dbname) {
   return dbname + "/LOG";
 }
 
-// Return the name of the old info log file for "dbname".
+/// Return the name of the old info log file for "dbname".
+/// dbname/LOG.old
 std::string OldInfoLogFileName(const std::string& dbname) {
   return dbname + "/LOG.old";
 }
@@ -120,9 +136,23 @@ bool ParseFileName(const std::string& filename, uint64_t* number,
   return true;
 }
 
+/**
+ * @brief 创建CURRENT文件
+ * 
+ * 1. 创建临时文件
+ * 2. 向临时文件写入当前MANIFEST文件名
+ * 3. 将临时文件改名为CURRENT（mv操作？）
+ * 4. 删除临时文件
+ * 
+ * @param env 
+ * @param dbname 
+ * @param descriptor_number 
+ * @return Status 
+ */
 Status SetCurrentFile(Env* env, const std::string& dbname,
                       uint64_t descriptor_number) {
   // Remove leading "dbname/" and add newline to manifest file name
+  // 删除开头的“dbname/”，并在清单文件名中添加换行符
   std::string manifest = DescriptorFileName(dbname, descriptor_number);
   Slice contents = manifest;
   assert(contents.starts_with(dbname + "/"));

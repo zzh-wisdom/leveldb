@@ -342,7 +342,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
 /**
  * @brief 近似定位key对应的value的offset
  * 
- * 这里并不是精确的定位，而是在Table中找到第一个>=指定key的k/v对，然后返回其value在sstable文件中的偏移
+ * 这里并不是精确的定位，而是key在Table中对应的data block的起始偏移。
  * 
  * @param key 
  * @return uint64_t 

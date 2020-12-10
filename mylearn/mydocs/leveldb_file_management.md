@@ -20,7 +20,7 @@ enum FileType {
 
 一个数据库包含7种文件:
 
-1. kLogFile: WAL日志文件，文件名为[0-9]+.log
+1. kLogFile: WAL日志文件，文件名为[0-9]+.log，读方式：**NewSequentialFile**
 2. kDBLockFile: db锁文件，文明名为LOCK，通过LOCK文件加文件锁（flock）来实现只有一个实例能操作db
 3. kTableFile: sstable文件，文件名为[0-9]+.sst
 4. kDescriptorFile: db元数据文件，存储系统中version信息，文件名为MANIFEST-[0-9]+，每当db发生compaction时，对应的versionedit会记录到descriptor文件中
@@ -35,6 +35,10 @@ enum FileType {
 日志文件（* .log）存储一系列最近的更新。每个更新都附加到当前的日志文件。日志文件达到预定大小时（默认情况下约为4MB），它会转换为有序的table（请参见下文）并创建一个新的日志文件以供将来更新。
 
 当前的log文件在内存中的存在形式就是`memtable`，每次read操作都会访问memtable，以保证read读取到的是最新的数据。
+
+
+
+日志恢复期间，若日志文件打开失败，数据库可以正确使用，错误以日志的形式打印到系统日志文件中。
 
 ### SSTable文件(Sorted tables)
 

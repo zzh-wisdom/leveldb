@@ -338,8 +338,8 @@ Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
  * - 对于level=0级别的sstable文件，直接通过TableCache::NewIterator()接口创建，这会直接载入sstable文件到内存cache中。
  * - 对于level>0级别的sstable文件，通过函数NewTwoLevelIterator()创建一个TwoLevelIterator，这就使用了lazy open的机制。
  * 
- * 1. 对于level=0级别的sstable文件，直接装入cache（使用cache->NewIterator打开文件的迭代器），level0的sstable文件可能有重合，需要merge。
- * 2. 对于level>0级别的sstable文件，lazy open机制，它们不会有重叠。
+ * 1. 对于level=0级别的sstable文件，直接装入cache（使用cache->NewIterator打开文件的迭代器），每个文件生成一个迭代器。这些文件有重叠
+ * 2. 对于level>0级别的sstable文件，lazy open机制，它们不会有重叠。每个一个level生成一个迭代器
  * 
  * @param options 
  * @param iters 
@@ -597,6 +597,15 @@ bool Version::UpdateStats(const GetStats& stats) {
   return false;
 }
 
+/**
+ * @brief 抽样读internal_key
+ * 
+ * 用于加快compaction？
+ * 
+ * @param internal_key 
+ * @return true 
+ * @return false 
+ */
 bool Version::RecordReadSample(Slice internal_key) {
   ParsedInternalKey ikey;
   if (!ParseInternalKey(internal_key, &ikey)) {
@@ -1061,6 +1070,24 @@ void VersionSet::AppendVersion(Version* v) {
   v->next_->prev_ = v;
 }
 
+/**
+ * @brief LogAndApply
+ * 
+ * 1. 为edit设置log number等4个计数器
+ * 2. 创建一个新的Version v，并把新的edit变动保存到v中
+ * 3. 如果MANIFEST文件指针不存在，就创建并初始化一个新的MANIFEST文件。这只会发生在第一次打开数据库时。
+ *    这个MANIFEST文件保存了current version的快照。
+ * 4. 向MANIFEST写入一条新的log，记录current version的信息。
+ *    在文件写操作时unlock锁，写入完成后，再重新lock，以防止浪费在长时间的IO操作上。
+ * 5. 安装这个新的version
+ * 
+ * 关于VersionEdit的计数器主要用到 log_number_和prev_log_number_
+ * 
+ * 
+ * @param edit  也会被函数修改。
+ * @param mu 
+ * @return Status 
+ */
 Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   if (edit->has_log_number_) {
     assert(edit->log_number_ >= log_number_);
@@ -1091,13 +1118,14 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   if (descriptor_log_ == nullptr) {
     // No reason to unlock *mu here since we only hit this path in the
     // first call to LogAndApply (when opening the database).
+    // 这里不需要unlock *mu因为我们只会在第一次调用LogAndApply时才走到这里(打开数据库时).
     assert(descriptor_file_ == nullptr);
     new_manifest_file = DescriptorFileName(dbname_, manifest_file_number_);
     edit->SetNextFile(next_file_number_);
     s = env_->NewWritableFile(new_manifest_file, &descriptor_file_);
     if (s.ok()) {
       descriptor_log_ = new log::Writer(descriptor_file_);
-      s = WriteSnapshot(descriptor_log_);
+      s = WriteSnapshot(descriptor_log_); // 写入快照
     }
   }
 
@@ -1108,10 +1136,10 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     // Write new record to MANIFEST log
     if (s.ok()) {
       std::string record;
-      edit->EncodeTo(&record);
-      s = descriptor_log_->AddRecord(record);
+      edit->EncodeTo(&record); // 序列化current version信息
+      s = descriptor_log_->AddRecord(record); // append到MANIFEST log中
       if (s.ok()) {
-        s = descriptor_file_->Sync();
+        s = descriptor_file_->Sync();  // 刷到磁盘中
       }
       if (!s.ok()) {
         Log(options_->info_log, "MANIFEST write: %s\n", s.ToString().c_str());
@@ -1120,6 +1148,8 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
     // If we just created a new descriptor file, install it by writing a
     // new CURRENT file that points to it.
+    //如果刚才创建了一个MANIFEST文件，通过写一个指向它的CURRENT文件
+    //安装它；不需要再次检查MANIFEST是否出错，因为如果出错后面会删除它
     if (s.ok() && !new_manifest_file.empty()) {
       s = SetCurrentFile(env_, dbname_, manifest_file_number_);
     }
@@ -1156,6 +1186,8 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
  * 3. 另外还解码得到了log number, prev log number, nextfile number, last sequence。这些信息手动应用到versionset中
  * 4. 将读取到的log number, prev log number标记为已使用。
  * 5. 最后，如果一切顺利就创建新的Version，builder.SaveTo(v);
+ * 
+ * @param save_manifest 表示恢复后是否需要保存manifest元数据文件，不能复用则其值为true
  * 
  */
 Status VersionSet::Recover(bool* save_manifest) {
@@ -1291,6 +1323,8 @@ Status VersionSet::Recover(bool* save_manifest) {
  * 
  * 若能复用则设置descriptor_file_，descriptor_log_
  * 
+ * 文件名不合法、不存在、或者太大都不能复用
+ * 
  * @param dscname  dbname/MANIFEST文件名
  * @param dscbase  MANIFEST文件名
  * @return true 
@@ -1334,7 +1368,7 @@ void VersionSet::MarkFileNumberUsed(uint64_t number) {
 }
 
 /**
- * @brief 安装新的版本，计算压缩参数
+ * @brief 定稿新版本(计算压缩参数)
  * 
  * 依照规则为下次的compaction计算出最适用的level，对于level 0和>0需要分别对待
  * 
@@ -1383,6 +1417,10 @@ void VersionSet::Finalize(Version* v) {
   v->compaction_score_ = best_score;
 }
 
+/// 把currentversion保存到*log中，信息包括：
+/// - comparator名字
+/// - compaction点
+/// - 各级sstable文件
 Status VersionSet::WriteSnapshot(log::Writer* log) {
   // TODO: Break up into multiple records to reduce memory usage on recovery?
 
@@ -1431,6 +1469,16 @@ const char* VersionSet::LevelSummary(LevelSummaryStorage* scratch) const {
   return scratch->buffer;
 }
 
+/**
+ * @brief 在指定的version中查找指定key的大概位置。
+ * 
+ * 假设version中有n个sstable文件，并且落在了地i个sstable的key空间内（对于L0层可能有多个），
+ * 那么返回的位置 = sstable1文件大小+sstable2文件大小 + … + sstable (i-1)文件大小
+ * 
+ * @param v 
+ * @param ikey 
+ * @return uint64_t 
+ */
 uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
   uint64_t result = 0;
   for (int level = 0; level < config::kNumLevels; level++) {
@@ -1463,6 +1511,7 @@ uint64_t VersionSet::ApproximateOffsetOf(Version* v, const InternalKey& ikey) {
   return result;
 }
 
+/// 将所有版本中存活的文件编号加入到live集合中
 void VersionSet::AddLiveFiles(std::set<uint64_t>* live) {
   for (Version* v = dummy_versions_.next_; v != &dummy_versions_;
        v = v->next_) {

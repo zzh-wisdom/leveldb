@@ -44,8 +44,9 @@ class Random {
     }
     return seed_;
   }
-  // Returns a uniformly distributed value in the range [0..n-1]
-  // REQUIRES: n > 0
+  /// Returns a uniformly distributed value in the range [0..n-1]
+  /// REQUIRES: n > 0
+  /// 返回范围为[0..n-1]的均匀分布的值
   uint32_t Uniform(int n) { return Next() % n; }
 
   // Randomly returns true ~"1/n" of the time, and false otherwise.

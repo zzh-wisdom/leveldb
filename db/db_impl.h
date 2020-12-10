@@ -166,9 +166,9 @@ class DBImpl : public DB {
   const InternalKeyComparator internal_comparator_;  // InternalKey的比较器
   const InternalFilterPolicy internal_filter_policy_; // InternalKey过滤策略
   const Options options_;  /// options_.comparator == &internal_comparator_
-  const bool owns_info_log_; 
-  const bool owns_cache_;
-  const std::string dbname_;
+  const bool owns_info_log_;   // 表示当前类是够拥有options_.info_log对象的所有权
+  const bool owns_cache_;   // 表示当前类是够拥有options_.block_cache对象的所有权
+  const std::string dbname_; 
 
   //== 第二组，只有两个。
   /// table_cache_ provides its own synchronization
@@ -178,7 +178,7 @@ class DBImpl : public DB {
 
   // State below is protected by mutex_
   //== 第三组，被mutex_保护的状态和成员
-  port::Mutex mutex_;
+  port::Mutex mutex_; 
   std::atomic<bool> shutting_down_;  /// 指示是否关闭数据库
   port::CondVar background_work_finished_signal_ GUARDED_BY(mutex_); /// 在background work结束时激发
   MemTable* mem_;
@@ -187,7 +187,7 @@ class DBImpl : public DB {
   WritableFile* logfile_;  /// log文件
   uint64_t logfile_number_ GUARDED_BY(mutex_); /// log 文件编号
   log::Writer* log_;  /// log writer
-  uint32_t seed_ GUARDED_BY(mutex_);  /// For sampling. 取样？
+  uint32_t seed_ GUARDED_BY(mutex_);  /// For sampling. 取样？初始化为0，没生成一份迭代器它会加一
 
   /// Queue of writers.
   std::deque<Writer*> writers_ GUARDED_BY(mutex_);  /// writer 队列
@@ -204,7 +204,7 @@ class DBImpl : public DB {
 
   ManualCompaction* manual_compaction_ GUARDED_BY(mutex_);  /// 手动compaction信息
 
-  VersionSet* const versions_ GUARDED_BY(mutex_); /// 多版本DB文件，又一个庞然大物
+  VersionSet* const versions_ GUARDED_BY(mutex_); /// 多版本DB文件，又一个庞然大物，初始时便创建一个VersionSet（以及其中的current Version）
 
   /// Have we encountered a background error in paranoid mode?
   Status bg_error_ GUARDED_BY(mutex_);

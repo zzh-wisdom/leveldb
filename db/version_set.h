@@ -175,7 +175,7 @@ class Version {
   Version* prev_;     /// Previous version in linked list
   int refs_;          /// Number of live refs to this version
 
-  /// List of files per level，sstable文件列表
+  /// List of files per level，sstable文件列表，存活的临时文件也会加入到这里
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   /// Next file to compact based on seek stats. 下一个要compact的文件
@@ -218,7 +218,6 @@ class VersionSet {
 
   /// Recover the last saved descriptor from persistent storage.
   /// 恢复数据，从磁盘恢复最后保存的元信息
-  /// @param save_manifest 表示恢复后是否需要保存manifest元数据文件
   Status Recover(bool* save_manifest);
 
   /// Return the current version.
@@ -354,7 +353,7 @@ class VersionSet {
   TableCache* const table_cache_; /// 指向sst文件的cache对象；
   const InternalKeyComparator icmp_;  /// InternalKey比较器；
   // 第二组，db元信息相关
-  uint64_t next_file_number_;  /// 下一个文件编号，文件编号计数器；初始为2
+  uint64_t next_file_number_;  /// 下一个文件编号，文件编号计数器；初始为2，所有文件类型共享一份文件编号计数器
   uint64_t manifest_file_number_;   /// manifest文件编号，初始为0
   uint64_t last_sequence_; /// 上一个序列号（快照就是靠它实现的），初始为0
   uint64_t log_number_;  /// log 文件编号，初始为0
@@ -363,7 +362,7 @@ class VersionSet {
   // 第三组，menifest文件相关
   /// Opened lazily
   WritableFile* descriptor_file_; /// 指向可写的manifest文件（log文件格式）；
-  log::Writer* descriptor_log_;   /// 指向log writer对象
+  log::Writer* descriptor_log_;   /// 指向log writer对象，用于向descriptor_file_写数据
   // 第四组，版本管理
   Version dummy_versions_;  /// Head of circular doubly-linked list of versions. 双向链表的head，初始为以this为参数构造的Version
   Version* current_;        /// == dummy_versions_.prev_  当前版本
