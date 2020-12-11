@@ -187,23 +187,24 @@ void DBIter::Next() {
     // use the normal skipping code below.
     // iter_指向this-> key（）的条目之前，因此请进入this-> key（）的条目范围，然后使用下面的常规跳过代码。
     if (!iter_->Valid()) {  // 此时意味着当前迭代器指到比第一个key还小的地方，prev函数造成的
-      iter_->SeekToFirst();
+      iter_->SeekToFirst();  // 让iter指向current key
     } else {
-      iter_->Next();
+      iter_->Next(); // 让iter指向current key
     }
     if (!iter_->Valid()) {
       valid_ = false;
       saved_key_.clear();
       return;
     }
-    // saved_key_ already contains the key to skip past.
+    // saved_key_ already contains the key to skip past. // 对于 kReverse，saved_key_保存的就是当前的key
   } else {
+    // 而对于kForward，需要手动将当前的key保存到saved_key_
     // Store in saved_key_ the current key so we skip it below.
     SaveKey(ExtractUserKey(iter_->key()), &saved_key_);
 
     // iter_ is pointing to current key. We can now safely move to the next to
     // avoid checking current key.
-    iter_->Next();
+    iter_->Next();  // 让iter指向current key
     if (!iter_->Valid()) {
       valid_ = false;
       saved_key_.clear();
@@ -211,6 +212,7 @@ void DBIter::Next() {
     }
   }
 
+  // 此时saved_key_保存当前key，以便被跳过
   FindNextUserEntry(true, &saved_key_);
 }
 
@@ -266,7 +268,7 @@ void DBIter::Prev() {
     // the key changes so we can use the normal reverse scanning code.
     assert(iter_->Valid());  // Otherwise valid_ would have been false
     SaveKey(ExtractUserKey(iter_->key()), &saved_key_);
-    while (true) {
+    while (true) {  // 这里的循环，是为了满足kReverse方向时，iter是指向current key的前一个位置的（userkey更小）
       iter_->Prev();
       if (!iter_->Valid()) {
         valid_ = false;
@@ -285,13 +287,13 @@ void DBIter::Prev() {
   FindPrevUserEntry();
 }
 /**
- * @brief 循环跳过下一个delete的记录，直到遇到kValueType的记录。
+ * @brief 循环跳过下一个delete的记录，也跳过和当前key的user_key相同的key，直到遇到kValueType的记录。
  * 
  */
 void DBIter::FindPrevUserEntry() {
   assert(direction_ == kReverse);
 
-  ValueType value_type = kTypeDeletion;
+  ValueType value_type = kTypeDeletion;  // 保存上一个记录的状态，初始化为kTypeDeletion，就是为了跳过当前key
   if (iter_->Valid()) {
     do {
       ParsedInternalKey ikey;
@@ -305,7 +307,7 @@ void DBIter::FindPrevUserEntry() {
         if (value_type == kTypeDeletion) {
           saved_key_.clear();  // 此时的key标记为kTypeDeletion，value为null
           ClearSavedValue();
-        } else {
+        } else {   // 对于同一个key存在多版本的情况，都会运行到这里，然后同一个user key的value会保存多遍，最后一次保存的是最新的
           Slice raw_value = iter_->value();
           if (saved_value_.capacity() > raw_value.size() + 1048576) { // 1MB
             std::string empty;
