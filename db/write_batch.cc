@@ -63,7 +63,7 @@ size_t WriteBatch::ApproximateSize() const { return rep_.size(); }
  * @brief 将batch中的操作依次执行
  * 
  * 根据类型，对应Put或者Delete \n
- * 遍历WriteBatch解析出并以key/value/valuetype的形式写入\n
+ * 遍历WriteBatch解析成valuetype/key/value/的形式，然后调用相应的Handler接口写入 \n
  * Delete操作只写入删除的key，ValueType是KTypeDeletion，表示key以及被删除，后续compaction会删除此key-value。
  * 
  * @param handler 
@@ -198,10 +198,21 @@ class MemTableInserter : public WriteBatch::Handler {
   SequenceNumber sequence_;
   MemTable* mem_;
 
+  /**
+   * @brief 向mem_插入一条记录，sequence_++
+   * 
+   * @param key 
+   * @param value 
+   */
   void Put(const Slice& key, const Slice& value) override {
     mem_->Add(sequence_, kTypeValue, key, value);
     sequence_++;
   }
+  /**
+   * @brief 从mem_删除一条记录，sequence_++
+   * 
+   * @param key 
+   */
   void Delete(const Slice& key) override {
     mem_->Add(sequence_, kTypeDeletion, key, Slice());
     sequence_++;

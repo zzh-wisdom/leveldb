@@ -1451,6 +1451,12 @@ Status VersionSet::WriteSnapshot(log::Writer* log) {
   return log->AddRecord(record);
 }
 
+/**
+ * @brief 返回某一level的文件数
+ * 
+ * @param level 
+ * @return int 
+ */
 int VersionSet::NumLevelFiles(int level) const {
   assert(level >= 0);
   assert(level < config::kNumLevels);

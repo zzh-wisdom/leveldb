@@ -27,8 +27,19 @@
 #include "leveldb/status.h"
 /**
  * \file write_batch.h
+ */
+
+namespace leveldb {
+
+class Slice;
+
+/**
+ * @brief WriteBatch
  * 
- * @brief WriteBatch结构体
+ * leveldb使用WriteBatch来替代简单的异步写操作，首先将所有的写操作记录到一个batch中，然后执行同步写，这样同步写的开销就被分散到多个写操作中。
+ * 
+ * 利用WriteBatch可以进行批量处理
+ * WriteBatch的原理是先将所有的操作记录下来，然后再一起操作。
  * 
  * \sa 
  *   - 网上博客： [leveldb之WriteBatch](https://blog.csdn.net/u012658346/article/details/45341885)
@@ -46,25 +57,20 @@
  *    data: uint8[len]
  * 
  * 每一个WriteBatch都是以一个固定长度的头部开始，然后后面接着许多连续的记录，
- * - 固定头部共12字节，其中前8字节为WriteBatch的序列号，即第一条记录的序列号，对应rep_[0-7],每次处理Batch中的记录时才会设置（更新）.
+ * - 固定头部共12字节，其中前8字节为WriteBatch的序列号，即第一条记录的序列号，对应rep_[0-7],每次处理Batch中的记录时（即BuildBatchGroup时）才会设置（更新）.
  * - 后四字节为当前Batch中的记录数count，对应rep_[8-11]
  * 
- */
-namespace leveldb {
-
-class Slice;
-
-/**
- * @brief WriteBatch
+ * 示意图如下：
  * 
- * leveldb使用WriteBatch来替代简单的异步写操作，首先将所有的写操作记录到一个batch中，然后执行同步写，这样同步写的开销就被分散到多个写操作中。
- * 
- * 利用WriteBatch可以进行批量处理
- * WriteBatch的原理是先将所有的操作记录下来，然后再一起操作。
+ * <div align=center><img src="../images/writebatch的记录格式.jpg" height="50%" width="50%"/></div>
  * 
  */
 class LEVELDB_EXPORT WriteBatch {
  public:
+  /**
+   * @brief 处理插入删除记录的接口类
+   * 
+   */
   class LEVELDB_EXPORT Handler {
    public:
     virtual ~Handler();

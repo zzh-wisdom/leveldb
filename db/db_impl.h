@@ -191,7 +191,7 @@ class DBImpl : public DB {
 
   /// Queue of writers.
   std::deque<Writer*> writers_ GUARDED_BY(mutex_);  /// writer 队列
-  WriteBatch* tmp_batch_ GUARDED_BY(mutex_);   /// 批量写请求的临时存放
+  WriteBatch* tmp_batch_ GUARDED_BY(mutex_);   /// 批量写请求的临时存放,多个batch操作整合在一起的结果
 
   SnapshotList snapshots_ GUARDED_BY(mutex_); /// snapshot列表
 
@@ -207,6 +207,7 @@ class DBImpl : public DB {
   VersionSet* const versions_ GUARDED_BY(mutex_); /// 多版本DB文件，又一个庞然大物，初始时便创建一个VersionSet（以及其中的current Version）
 
   /// Have we encountered a background error in paranoid mode?
+  /// 可能是：后台写写操作的日志记录错误、
   Status bg_error_ GUARDED_BY(mutex_);
 
   CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);  /// compaction状态

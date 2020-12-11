@@ -48,7 +48,7 @@ struct DBImpl::Writer {
   WriteBatch* batch;
   bool sync;
   bool done;
-  port::CondVar cv;
+  port::CondVar cv;  // 信号量
 };
 
 struct DBImpl::CompactionState {
@@ -767,6 +767,11 @@ Status DBImpl::TEST_CompactMemTable() {
   return s;
 }
 
+/**
+ * @brief 记录错误到后台记录 bg_error_ 中 
+ * 
+ * @param s 
+ */
 void DBImpl::RecordBackgroundError(const Status& s) {
   mutex_.AssertHeld();
   if (bg_error_.ok()) {
@@ -775,6 +780,23 @@ void DBImpl::RecordBackgroundError(const Status& s) {
   }
 }
 
+/**
+ * @brief 判断是否开启一个后台线程，如果需要则开启
+ * 
+ * 后台线程主要做两个事情：
+ * 1. 将imm_写入磁盘生成一个新的sstable
+ * 2. 对各个level中的文件进行合并，避免某个level中的文件过多，以及删除掉一些过期或者已经被用户调用delete删除的key-value。
+ * 
+ * - 每个时刻，leveldb只允许一个背景线程存在，所以该函数需要加锁
+ * 
+ * 没有后台线程，没有后台错误，则在以下三种情况下会开启后台线程：
+ * - imm不为nullptr
+ * - 存在手动compaction的信息
+ * - 某一层需要compaction
+ * 
+ * shutting_down_只会在DB的析构函数中被设置。
+ * 
+ */
 void DBImpl::MaybeScheduleCompaction() {
   mutex_.AssertHeld();
   if (background_compaction_scheduled_) {
@@ -792,10 +814,21 @@ void DBImpl::MaybeScheduleCompaction() {
   }
 }
 
+/**
+ * @brief 后台工作函数 BGWork 
+ * 
+ * @param db 
+ */
 void DBImpl::BGWork(void* db) {
   reinterpret_cast<DBImpl*>(db)->BackgroundCall();
 }
 
+/**
+ * @brief 后台执行的函数，Compaction
+ * 
+ * 数据库没有关闭，也没有出现后台错误，则进行后台compaction任务
+ * 
+ */
 void DBImpl::BackgroundCall() {
   MutexLock l(&mutex_);
   assert(background_compaction_scheduled_);
@@ -811,10 +844,19 @@ void DBImpl::BackgroundCall() {
 
   // Previous compaction may have produced too many files in a level,
   // so reschedule another compaction if needed.
+  // 先前的压缩可能在一个级别中产生过多的文件，因此，如果需要，可以重新计划另一个压缩。
   MaybeScheduleCompaction();
   background_work_finished_signal_.SignalAll();
 }
 
+/**
+ * @brief BackgroundCompaction处理背景线程的核心工作。
+ * 
+ * 1. 如果当前的imm_非空，则将其写盘生成一个新的sstable
+ * 2. 对各个level的文件进行合并，避免level中文件过多，
+ *    以及删掉被删除的key-value(因为leveldb里面采用的是lazy delete的方法，用户调用delete时没有真正删除元素，只有在背景线程对文件进行合并时才会真的删除元素)。
+ * 
+ */
 void DBImpl::BackgroundCompaction() {
   mutex_.AssertHeld();
 
@@ -1372,6 +1414,15 @@ Status DBImpl::Put(const WriteOptions& o, const Slice& key, const Slice& val) {
   return DB::Put(o, key, val);
 }
 
+/**
+ * @brief Delete
+ * 
+ * 直接调用 DB::Delete 函数。
+ * 
+ * @param options 
+ * @param key 
+ * @return Status 
+ */
 Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
   return DB::Delete(options, key);
 }
@@ -1385,9 +1436,14 @@ Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
  * 4. 设置WriteBatch的SequenceNumber, 更新 last_sequence += WriteBatchInternal::Count(write_batch);
  * 5. 先将WriteBatch中的数据写入log(Log::AddRecord())，根据需要，还需sync
  * 6. 然后将WriteBatch的数据写入memetable
- * 7. 更新版本 versions_->SetLastSequence(last_sequence);
+ * 7. 写成功后，才更新序列号 versions_->SetLastSequence(last_sequence);
  * 8. 将处理好的请求从队列中去除，并发信号唤醒那些在等待的线程（且它们的请求已经处理好）
  * 9. 还要唤醒此时处于队列头部的请求
+ * 
+ * writers_，保证每次只有一个消费者对writers_队列进行处理。因为不管在什么情况下，
+ * 只会有一个生产者线程的任务放在队列头部，但是有可能一个时间会有多个生产者线程的任务被处理掉。
+ * 
+ * 所以，实际上只有一个线程进行写操作。
  * 
  * @param options 
  * @param updates 
@@ -1403,7 +1459,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
    * 这里隐含加锁，使用这个类，应该是为了防止忘记解锁。
    * 因为， MutexLock 类在析构时会自动解锁
    */
-  MutexLock l(&mutex_); // 
+  MutexLock l(&mutex_);
   writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
     w.cv.Wait();
@@ -1427,7 +1483,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
     // into mem_.
     /**
      * 添加到日志并应用于memtable。我们可以在此阶段释放锁定，
-     * 因为此时，＆w负责和防止日志并发记录和并发写入mem_。
+     * 因为此时，＆w负责和防止日志并发记录和并发写入mem_。因为同时只有一个w位于writers_队列的头部
      */
     {
       mutex_.Unlock();
@@ -1447,6 +1503,8 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* updates) {
         // The state of the log file is indeterminate: the log record we
         // just added may or may not show up when the DB is re-opened.
         // So we force the DB into a mode where all future writes fail.
+        // 日志文件的状态是不确定的：重新打开数据库时，刚添加的日志记录可能会也可能不会被重做。 
+        // 因此，我们强制DB进入以后所有写入均失败的模式。
         RecordBackgroundError(status);
       }
     }
@@ -1507,8 +1565,9 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
   // Allow the group to grow up to a maximum size, but if the
   // original write is small, limit the growth so we do not slow
   // down the small write too much.
+  // 允许组增长到最大大小，但是如果原始写入很小，请限制增长，因此我们不要过多降低小写入的速度。
   size_t max_size = 1 << 20;
-  if (size <= (128 << 10)) {
+  if (size <= (128 << 10)) {  // 128kb
     max_size = size + (128 << 10);
   }
 
@@ -1541,31 +1600,43 @@ WriteBatch* DBImpl::BuildBatchGroup(Writer** last_writer) {
     }
     *last_writer = w;
   }
+  // 返回的可能是writers_.front()，也可能是tmp_batch_
   return result;
 }
 
 /**
  * @brief MakeRoomForWrite 延迟写，以留空间给内部操作
  * 
- * 1. 如果当前L0层的文件数目达到了kL0_SlowdownWritesTrigger(8)阈值，则会延迟1ms写入，该延迟只发生一次
+ * 在 DBImpl::Write函数中调用到这个函数，当写的更新为nullptr时，传入的force为true。
+ * MakeRoomForWrite是在write函数中调用，以确保mem_有空间可写
+ * 
+ * 进行下列循环：
+ * 1. 当前写入的更新不为null，则允许延迟写，并且如果当前L0层的文件数目达到了kL0_SlowdownWritesTrigger(8)阈值，则会延迟1ms写入，该延迟只发生一次
  *    > 我们即将达到对L0文件数量的严格限制。当我们达到硬限制时，与其将单个写入延迟几秒钟，
  *    > 不如将每个单独写入延迟1ms以减少延迟差异。同样，如果它与写程序共享同一内核，则此延迟会将一些CPU移交给压缩线程。
- * 2. 如果当前memtable的size未达到阈值write_buffer_size(默认4MB)，则允许写入
+ * 2. 当前写入的更新不为null，则不强制开启一个compaction，并且如果当前memtable的size未达到阈值write_buffer_size(默认4MB)，则允许写入，跳出循坏
  * 3. 如果memtable的size已经达到阈值，但immutable memtable仍然存在，则等待compaction将其dump完成；
- * 4. 如果L0文件数目达到了kL0_StopWritesTrigger(12)，则等待compaction memtable完成
- * 5. \b 上述条件都不满足， 则memtable已经写满，并且immutable memtable不存在，
+ * 4. 如果L0文件数目达到了kL0_StopWritesTrigger(12)，则等待后台compaction完成，否则mem变成imm然后写盘，L0层的文件会变得更多
+ * 5. \b 上述条件都不满足， 则说明memtable已经写满，并且immutable memtable不存在，
  *    则将当前memetable置成immutable memtable，产生新的memtable和log file，主动触发compaction，允许该次写(下一次循环跳出)。
+ * 
+ * 不管怎么样，从MakeRoomForWrite函数返回之后，mem_中都会有足够空间可写了.
+ * 
+ * 如果force为true的话，则强制跳过前两个判断，从第三个判断开始执行。
+ * 综合来看，一个空的write操作，实际就是强制将当前的mem转化为imm，然后开启一个新的compaction，并且此时L0层的文件也不会太多
  * 
  * \pre REQUIRES: mutex_ is held
  * \pre REQUIRES: this thread is currently at the front of the writer queue
+ * 
+ * @param force 是否强制开始一个compaction
  */
 Status DBImpl::MakeRoomForWrite(bool force) {
   mutex_.AssertHeld();
   assert(!writers_.empty());
-  bool allow_delay = !force;
+  bool allow_delay = !force;  // 当前写入的更新为null，则不允许延迟写
   Status s;
   while (true) {
-    if (!bg_error_.ok()) {
+    if (!bg_error_.ok()) { // 后台线程执行有错误，直接返回
       // Yield previous error
       s = bg_error_;
       break;
@@ -1577,6 +1648,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // individual write by 1ms to reduce latency variance.  Also,
       // this delay hands over some CPU to the compaction thread in
       // case it is sharing the same core as the writer.
+      // 发现level 0 中的文件过多，则说明需要背景线程进行合并，因此需要等待背景线程合并完成之后再写入
       mutex_.Unlock();
       env_->SleepForMicroseconds(1000);
       allow_delay = false;  // Do not delay a single write more than once
@@ -1584,17 +1656,21 @@ Status DBImpl::MakeRoomForWrite(bool force) {
     } else if (!force &&
                (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
       // There is room in current memtable
+      // 判断mem_中是否有足够的空间，如果mem_中还有空间就直接break 返回了。我们会注意到，while循环只有在这里才会正确地返回，
+      // 也就是说，这个while循环会一直继续下去直到发生错误或者mem_有足够空间可写
       break;
-    } else if (imm_ != nullptr) {
+    } else if (imm_ != nullptr) {  // mem_没有足够的空间可供写，且前一个imm还存在，需要等待它写入磁盘
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
       Log(options_.info_log, "Current memtable full; waiting...\n");
       background_work_finished_signal_.Wait();
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
       // There are too many level-0 files.
+      // 此时level 0 中的文件数量是否太多，太多的话那就还得等一会，因为mem变成imem后又会写盘，导致L0的文件增多
       Log(options_.info_log, "Too many L0 files; waiting...\n");
       background_work_finished_signal_.Wait();
-    } else {
+    } else { //imm_为空，mem_没有空间可写
+      // 我们可以把mem_复制给imm_，并为mem_重新分配一个新的Memtable了，开启背景线程对imm_写盘
       // Attempt to switch to a new memtable and trigger compaction of old
       assert(versions_->PrevLogNumber() == 0);
       uint64_t new_log_number = versions_->NewFileNumber();
@@ -1602,10 +1678,11 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);
       if (!s.ok()) {
         // Avoid chewing through file number space in a tight loop.
-        versions_->ReuseFileNumber(new_log_number);
+        // 避免在紧密的循环中仔细检查文件编号空间。
+        versions_->ReuseFileNumber(new_log_number);  // 服用刚刚分配的文件编号
         break;
       }
-      delete log_;
+      delete log_;  // 删除之前的log对象
       delete logfile_;
       logfile_ = lfile;
       logfile_number_ = new_log_number;

@@ -34,7 +34,7 @@ Writer::~Writer() = default;
 /**
  * @brief AddRecord
  * 
- * 写记录
+ * 写日志记录
  * 
  * @attention
  * 即使slice长度为0，仍记录一条长度为0的记录
