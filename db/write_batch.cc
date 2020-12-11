@@ -40,11 +40,23 @@ WriteBatch::~WriteBatch() = default;
 
 WriteBatch::Handler::~Handler() = default;
 
+/**
+ * @brief clear
+ * 
+ * 将req_清空
+ * rep_.resize(kHeader);
+ * 
+ */
 void WriteBatch::Clear() {
   rep_.clear();
   rep_.resize(kHeader);
 }
 
+/**
+ * @brief 返回rep_.size()
+ * 
+ * @return size_t 
+ */
 size_t WriteBatch::ApproximateSize() const { return rep_.size(); }
 
 /**
@@ -98,7 +110,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
 }
 
 /**
- * @brief 计算xx个数
+ * @brief 计算WriteBatch中记录的个数
  * 
  * 将WriteBatch中rep_的第8-11的四个字节解码成一个uint32的整数
  * 
@@ -109,20 +121,42 @@ int WriteBatchInternal::Count(const WriteBatch* b) {
   return DecodeFixed32(b->rep_.data() + 8);
 }
 
+/**
+ * @brief 设置WriteBatch的记录个数为n
+ * 
+ * @param b 
+ * @param n 
+ */
 void WriteBatchInternal::SetCount(WriteBatch* b, int n) {
   EncodeFixed32(&b->rep_[8], n);
 }
 
+/**
+ * @brief 获取WriteBatch的序列号
+ * 
+ * @param b 
+ * @return SequenceNumber 
+ */
 SequenceNumber WriteBatchInternal::Sequence(const WriteBatch* b) {
   return SequenceNumber(DecodeFixed64(b->rep_.data()));
 }
 
+/**
+ * @brief 设置WriteBatch的序列号为seq
+ * 
+ * @param b 
+ * @param seq 
+ */
 void WriteBatchInternal::SetSequence(WriteBatch* b, SequenceNumber seq) {
   EncodeFixed64(&b->rep_[0], seq);
 }
 
 /**
- * @brief 
+ * @brief Put
+ * 
+ * 1. 记录个数加一
+ * 2. 添加记录的类型kTypeValue
+ * 3. 依次添加带有前缀长度的key和value字符串
  * 
  * @param key 
  * @param value 
@@ -134,12 +168,22 @@ void WriteBatch::Put(const Slice& key, const Slice& value) {
   PutLengthPrefixedSlice(&rep_, value);
 }
 
+/**
+ * @brief Delete
+ * 
+ * @param key 
+ */
 void WriteBatch::Delete(const Slice& key) {
   WriteBatchInternal::SetCount(this, WriteBatchInternal::Count(this) + 1);
   rep_.push_back(static_cast<char>(kTypeDeletion));
   PutLengthPrefixedSlice(&rep_, key);
 }
 
+/**
+ * @brief 附加source中的记录
+ * 
+ * @param source 
+ */
 void WriteBatch::Append(const WriteBatch& source) {
   WriteBatchInternal::Append(this, &source);
 }
@@ -179,11 +223,25 @@ Status WriteBatchInternal::InsertInto(const WriteBatch* b, MemTable* memtable) {
   return b->Iterate(&inserter);
 }
 
+/**
+ * @brief SetContents
+ * 
+ * 将 b->rep_ 设置为 contents
+ * 
+ * @param b 
+ * @param contents 
+ */
 void WriteBatchInternal::SetContents(WriteBatch* b, const Slice& contents) {
   assert(contents.size() >= kHeader);
   b->rep_.assign(contents.data(), contents.size());
 }
 
+/**
+ * @brief 将src中的记录附加到dst中
+ * 
+ * @param dst 
+ * @param src 
+ */
 void WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src) {
   SetCount(dst, Count(dst) + Count(src));
   assert(src->rep_.size() >= kHeader);

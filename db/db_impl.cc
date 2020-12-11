@@ -1311,6 +1311,8 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& key,
   mem->Unref();
   if (imm != nullptr) imm->Unref();
   current->Unref();
+
+  // 释放锁（由析构函数完成），返回结果。
   return s;
 }
 

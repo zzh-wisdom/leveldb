@@ -55,6 +55,15 @@ struct LEVELDB_EXPORT Range {
  * A DB is a persistent ordered map from keys to values. 有序的键值映射。
  * A DB is safe for concurrent access from multiple threads without
  * any external synchronization. 多线程安全
+ * 
+ * 我们通过调用db->Put(WriteOptions(),&key,&value);来写入数据，而WriteOptions只有一个变量sync,
+ * 且默认初始值为false，因此leveldb默认的写数据方式是异步，即每将写操作提交将数据写入到内存中就返回，而将数据从内存写到磁盘的方式是异步的。
+ * 
+ * - 异步写比同步写的效率高得多，但是当系统故障时，可能导致最近的更新丢失。
+ * - 若将WriteOptions的sync设为true，则每次写入都会将数据写入到磁盘中，速度非常慢。
+ * 
+ * leveldb使用WriteBatch来替代简单的异步写操作，首先将所有的写操作记录到一个batch中，然后执行同步写，这样同步写的开销就被分散到多个写操作中。
+ * 
  */
 class LEVELDB_EXPORT DB {
  public:
@@ -104,6 +113,7 @@ class LEVELDB_EXPORT DB {
 
   /// Apply the specified updates to the database.
   /// Returns OK on success, non-OK on failure.
+  /// 用于批量写
   /// Note: consider setting options.sync = true.
   virtual Status Write(const WriteOptions& options, WriteBatch* updates) = 0;
 
