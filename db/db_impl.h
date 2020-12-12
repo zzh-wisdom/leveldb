@@ -54,10 +54,10 @@ class DBImpl : public DB {
 
   // Extra methods (for testing) that are not in the public DB interface
 
-  // Compact any files in the named level that overlap [*begin,*end]
+  /// Compact any files in the named level that overlap [*begin,*end]
   void TEST_CompactRange(int level, const Slice* begin, const Slice* end);
 
-  // Force current memtable contents to be compacted.
+  /// Force current memtable contents to be compacted.
   Status TEST_CompactMemTable();
 
   // Return an internal iterator over the current state of the database.
@@ -83,9 +83,9 @@ class DBImpl : public DB {
   struct ManualCompaction {
     int level;
     bool done;
-    const InternalKey* begin;  // null means beginning of key range
-    const InternalKey* end;    // null means end of key range
-    InternalKey tmp_storage;   // Used to keep track of compaction progress
+    const InternalKey* begin;  /// null means beginning of key range
+    const InternalKey* end;    /// null means end of key range
+    InternalKey tmp_storage;   /// Used to keep track of compaction progress，用于跟踪压缩的进度，实际没用处
   };
 
   // Per level compaction stats.  stats_[level] stores the stats for
@@ -101,7 +101,7 @@ class DBImpl : public DB {
 
     int64_t micros;
     int64_t bytes_read;
-    int64_t bytes_written;
+    int64_t bytes_written;   // 写字节数
   };
 
   Iterator* NewInternalIterator(const ReadOptions&,
@@ -209,8 +209,8 @@ class DBImpl : public DB {
   /// Have we encountered a background error in paranoid mode?
   /// 可能是：后台写写操作的日志记录错误、
   Status bg_error_ GUARDED_BY(mutex_);
-
-  CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);  /// compaction状态
+  /// level 和 level + 1 层的压缩信息放置到stats_[level+1]
+  CompactionStats stats_[config::kNumLevels] GUARDED_BY(mutex_);  /// 统计各层compaction的信息
 };
 
 // Sanitize db options.  The caller should delete result.info_log if

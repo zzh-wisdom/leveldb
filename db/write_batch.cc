@@ -169,7 +169,7 @@ void WriteBatch::Put(const Slice& key, const Slice& value) {
 }
 
 /**
- * @brief Delete
+ * @brief 添加一条删除key的记录
  * 
  * @param key 
  */

@@ -34,12 +34,19 @@ class WriteBatch;
 // Abstract handle to particular state of a DB.
 // A Snapshot is an immutable object and can therefore be safely
 // accessed from multiple threads without any external synchronization.
+/**
+ * @brief Snapshot
+ * 
+ * 数据库特定状态的抽象句柄。 快照是一个不变的对象，因此可以从多个线程安全地访问而无需任何外部同步。
+ * 
+ */
 class LEVELDB_EXPORT Snapshot {
  protected:
   virtual ~Snapshot();
 };
 
-// A range of keys
+/// A range of keys
+/// 范围为[start, limit)
 struct LEVELDB_EXPORT Range {
   Range() = default;
   Range(const Slice& s, const Slice& l) : start(s), limit(l) {}
@@ -153,14 +160,15 @@ class LEVELDB_EXPORT DB {
   ///
   /// Valid property names include:
   ///
-  ///  "leveldb.num-files-at-level<N>" - return the number of files at level <N>,
-  ///     where <N> is an ASCII representation of a level number (e.g. "0").
-  ///  "leveldb.stats" - returns a multi-line string that describes statistics
+  ///  - "leveldb.num-files-at-level<N>" - return the number of files at level <N>,
+  ///     where <N> is an ASCII representation of a level number (e.g. "0").指定level的文件数
+  ///  - "leveldb.stats" - returns a multi-line string that describes statistics
   ///     about the internal operation of the DB.// 内部操作的统计信息
-  ///  "leveldb.sstables" - returns a multi-line string that describes all
+  ///  - "leveldb.sstables" - returns a multi-line string that describes all
   ///     of the sstables that make up the db contents.
-  ///  "leveldb.approximate-memory-usage" - returns the approximate number of
+  ///  - "leveldb.approximate-memory-usage" - returns the approximate number of
   ///     bytes of memory in use by the DB.
+  /// 获取数据库的状态
   virtual bool GetProperty(const Slice& property, std::string* value) = 0;
 
   /// For each i in [0,n-1], store in "sizes[i]", the approximate
@@ -172,6 +180,7 @@ class LEVELDB_EXPORT DB {
   /// 返回压缩后的大小
   ///
   /// The results may not include the sizes of recently written data.
+  /// 获取指定key范围内数据量的大约大小
   virtual void GetApproximateSizes(const Range* range, int n,
                                    uint64_t* sizes) = 0;
 

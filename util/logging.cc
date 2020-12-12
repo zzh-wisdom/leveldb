@@ -54,6 +54,14 @@ std::string EscapeString(const Slice& value) {
   return r;
 }
 
+/**
+ * @brief 从in中解码得到十进制的数，并且将消费in的相应字符
+ * 
+ * @param in 
+ * @param val 
+ * @return true 
+ * @return false 
+ */
 bool ConsumeDecimalNumber(Slice* in, uint64_t* val) {
   // Constants that will be optimized away.
   constexpr const uint64_t kMaxUint64 = std::numeric_limits<uint64_t>::max();
@@ -63,6 +71,7 @@ bool ConsumeDecimalNumber(Slice* in, uint64_t* val) {
   uint64_t value = 0;
 
   // reinterpret_cast-ing from char* to uint8_t* to avoid signedness.
+  // 避免符号
   const uint8_t* start = reinterpret_cast<const uint8_t*>(in->data());
 
   const uint8_t* end = start + in->size();
@@ -71,7 +80,7 @@ bool ConsumeDecimalNumber(Slice* in, uint64_t* val) {
     const uint8_t ch = *current;
     if (ch < '0' || ch > '9') break;
 
-    // Overflow check.
+    // Overflow check. 判断是否溢出
     // kMaxUint64 / 10 is also constant and will be optimized away.
     if (value > kMaxUint64 / 10 ||
         (value == kMaxUint64 / 10 && ch > kLastDigitOfMaxUint64)) {

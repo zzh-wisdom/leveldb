@@ -14,6 +14,19 @@
 
 namespace leveldb {
 
+/**
+ * @brief BuildTable
+ * 
+ * 根据iter，生成一个sstable
+ * 
+ * @param dbname 
+ * @param env 
+ * @param options 
+ * @param table_cache 
+ * @param iter 
+ * @param meta 
+ * @return Status 
+ */
 Status BuildTable(const std::string& dbname, Env* env, const Options& options,
                   TableCache* table_cache, Iterator* iter, FileMetaData* meta) {
   Status s;

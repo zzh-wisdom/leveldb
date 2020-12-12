@@ -185,8 +185,8 @@ class Version {
   /// Level that should be compacted next and its compaction score.
   /// Score < 1 means compaction is not strictly needed.  These fields
   /// are initialized by Finalize().
-  double compaction_score_;
-  int compaction_level_;
+  double compaction_score_;  /// 分数大于1则需要进行压缩
+  int compaction_level_;   /// 必定小于最高的level
 };
 
 /**
@@ -314,8 +314,8 @@ class VersionSet {
   // "key" as of version "v".
   uint64_t ApproximateOffsetOf(Version* v, const InternalKey& key);
 
-  // Return a human-readable short (single-line) summary of the number
-  // of files per level.  Uses *scratch as backing store.
+  /// Return a human-readable short (single-line) summary of the number
+  /// of files per level.  Uses *scratch as backing store.
   struct LevelSummaryStorage {
     char buffer[100];
   };
@@ -374,6 +374,14 @@ class VersionSet {
 };
 
 // A Compaction encapsulates information about a compaction.
+/**
+ * @brief 
+ * 
+ * Compaction封装有关压缩的信息。
+ * 
+ * compaction将会合并level和level+1中的部分文件
+ * 
+ */
 class Compaction {
  public:
   ~Compaction();
@@ -386,7 +394,7 @@ class Compaction {
   // by this compaction.
   VersionEdit* edit() { return &edit_; }
 
-  // "which" must be either 0 or 1
+  /// "which" must be either 0 or 1
   int num_input_files(int which) const { return inputs_[which].size(); }
 
   // Return the ith input file at "level()+which" ("which" must be 0 or 1).
@@ -402,9 +410,10 @@ class Compaction {
   // Add all inputs to this compaction as delete operations to *edit.
   void AddInputDeletions(VersionEdit* edit);
 
-  // Returns true if the information we have available guarantees that
-  // the compaction is producing data in "level+1" for which no data exists
-  // in levels greater than "level+1".
+  /// Returns true if the information we have available guarantees that
+  /// the compaction is producing data in "level+1" for which no data exists
+  /// in levels greater than "level+1".
+  /// 压缩在level + 1生成的数据（key）没有在更高层中存在（即没有文件范围包含这个key），则返回true
   bool IsBaseLevelForKey(const Slice& user_key);
 
   // Returns true iff we should stop building the current output
@@ -421,21 +430,26 @@ class Compaction {
 
   Compaction(const Options* options, int level);
 
-  int level_;
-  uint64_t max_output_file_size_;
-  Version* input_version_;
-  VersionEdit edit_;
+  int level_;     /// 当前压缩的level，构造时根据传入的参数初始化
+  uint64_t max_output_file_size_;  /// 压缩后输出文件的最大大小，根据用户的option初始化
+  Version* input_version_;  /// 压缩时的当前版本
+  VersionEdit edit_;   /// 带回压缩后的元数据变化信息
 
-  // Each compaction reads inputs from "level_" and "level_+1"
-  std::vector<FileMetaData*> inputs_[2];  // The two sets of inputs
+  /// Each compaction reads inputs from "level_" and "level_+1"
+  std::vector<FileMetaData*> inputs_[2];  /// The two sets of inputs
 
-  // State used to check for number of overlapping grandparent files
-  // (parent == level_ + 1, grandparent == level_ + 2)
+  /// State used to check for number of overlapping grandparent files
+  /// (parent == level_ + 1, grandparent == level_ + 2)
+  /// 保存祖母level（即level + 2）与当前压缩的所有文件组成的范围重叠的文件
+  /// 通过grandparents_数组，我们可以控制新合并生成放在level+1中的每个sstable文件不要和level+2中的过多文件有key范围重合
   std::vector<FileMetaData*> grandparents_;
-  size_t grandparent_index_;  // Index in grandparent_starts_
-  bool seen_key_;             // Some output key has been seen
-  int64_t overlapped_bytes_;  // Bytes of overlap between current output
-                              // and grandparent files
+  size_t grandparent_index_;  /// Index in grandparent_starts_，grandparents_数据的下表索引
+  /// 保证每个合并而成的sstable中都有key-value数据。想象一个场景，
+  /// 如果合并过程中第一个打算加入的key是一个比level+2中很多文件的最大key都大的数值，
+  /// 则我们可能会误以为当前合并而成的文件已经足够大了，准备把它写盘，但是实际却是当前构建文件中还没有key-value，于是就会出现问题。
+  bool seen_key_;             /// Some output key has been seen
+  int64_t overlapped_bytes_;  /// Bytes of overlap between current output
+                              /// and grandparent files，用以防止生成的单个文件与level+2的太多文件重叠
 
   // State for implementing IsBaseLevelForKey
 
@@ -443,6 +457,8 @@ class Compaction {
   // is that we are positioned at one of the file ranges for each
   // higher level than the ones involved in this compaction (i.e. for
   // all L >= level_ + 2).
+  /// 存储的是整型变量，记录每次遍历各层文件时的下标信息，主要用于判断一个key是否在level+2以及更高层的的文件中。
+  /// 可以看IsBaseLevelForKey函数的实现。level_ptrs_[]记录是某个key的上界文件下标
   size_t level_ptrs_[config::kNumLevels];
 };
 
