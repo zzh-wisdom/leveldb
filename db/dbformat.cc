@@ -111,7 +111,7 @@ void InternalKeyComparator::FindShortestSeparator(std::string* start,
     // User key has become shorter physically, but larger logically.
     // Tack on the earliest possible number to the shortened user key.
     // 使用最大的sequence number，以保证排在相同user key记录序列的第一个
-    // 所以seq应该是降序的吧，越大版本越旧？
+    // 所以seq应该是降序的吧，越大版本越小，这样遍历时总是先找到版本大的
     PutFixed64(&tmp,
                PackSequenceAndType(kMaxSequenceNumber, kValueTypeForSeek));
     assert(this->Compare(*start, tmp) < 0);

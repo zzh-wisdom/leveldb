@@ -73,8 +73,8 @@ std::string OldInfoLogFileName(const std::string& dbname);
 bool ParseFileName(const std::string& filename, uint64_t* number,
                    FileType* type);
 
-// Make the CURRENT file point to the descriptor file with the
-// specified number.
+/// Make the CURRENT file point to the descriptor file with the
+/// specified number.
 Status SetCurrentFile(Env* env, const std::string& dbname,
                       uint64_t descriptor_number);
 

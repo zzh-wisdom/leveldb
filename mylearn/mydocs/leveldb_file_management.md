@@ -21,7 +21,7 @@ enum FileType {
 一个数据库包含7种文件:
 
 1. kLogFile: WAL日志文件，文件名为[0-9]+.log，读方式：**NewSequentialFile**
-2. kDBLockFile: db锁文件，文明名为LOCK，通过LOCK文件加文件锁（flock）来实现只有一个实例能操作db
+2. kDBLockFile: db锁文件，文明名为LOCK，通过LOCK文件加文件锁（flock）来实现只有一个实例能操作db，使用了操作系统对文件提供的锁机制。同时只有一个进程可以对文件上锁。
 3. kTableFile: sstable文件，文件名为[0-9]+.sst
 4. kDescriptorFile: db元数据文件，存储系统中version信息，文件名为MANIFEST-[0-9]+，每当db发生compaction时，对应的versionedit会记录到descriptor文件中
 5. kCurrentFile: 记录当前使用的descriptor文件名，文件名为CURRENT，读方式：**NewSequentialFile**

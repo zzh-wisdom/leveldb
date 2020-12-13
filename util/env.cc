@@ -47,6 +47,18 @@ void Log(Logger* info_log, const char* format, ...) {
   }
 }
 
+/**
+ * @brief DoWriteStringToFile
+ * 
+ * 将数据data写到文件fname中。
+ * 如果文件fname不存在，则会创建一个，写入数据后则立即将文件关闭
+ * 
+ * @param env 
+ * @param data 
+ * @param fname 
+ * @param should_sync 
+ * @return Status 
+ */
 static Status DoWriteStringToFile(Env* env, const Slice& data,
                                   const std::string& fname, bool should_sync) {
   WritableFile* file;

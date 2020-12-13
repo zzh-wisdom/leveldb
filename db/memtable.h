@@ -95,7 +95,7 @@ class MemTable {
 
   KeyComparator comparator_;
   int refs_;
-  Arena arena_;
+  Arena arena_;  /// 初始化时使用无参构造函数构造的
   Table table_;
 };
 

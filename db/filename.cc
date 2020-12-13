@@ -13,10 +13,20 @@
 
 namespace leveldb {
 
-// A utility routine: write "data" to the named file and Sync() it.
+/// A utility routine: write "data" to the named file and Sync() it.
 Status WriteStringToFileSync(Env* env, const Slice& data,
                              const std::string& fname);
 
+/**
+ * @brief MakeFileName
+ * 
+ * dbname/<number>.<suffix>
+ * 
+ * @param dbname 
+ * @param number 
+ * @param suffix 
+ * @return std::string 
+ */
 static std::string MakeFileName(const std::string& dbname, uint64_t number,
                                 const char* suffix) {
   char buf[100];
@@ -25,16 +35,43 @@ static std::string MakeFileName(const std::string& dbname, uint64_t number,
   return dbname + buf;
 }
 
+/**
+ * @brief LogFileName
+ * 
+ * dbname/<number>.log
+ * 
+ * @param dbname 
+ * @param number 
+ * @return std::string 
+ */
 std::string LogFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   return MakeFileName(dbname, number, "log");
 }
 
+/**
+ * @brief TableFileName
+ * 
+ * dbname/<number>.ldb
+ * 
+ * @param dbname 
+ * @param number 
+ * @return std::string 
+ */
 std::string TableFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   return MakeFileName(dbname, number, "ldb");
 }
 
+/**
+ * @brief SSTTableFileName
+ * 
+ * dbname/<number>.sst
+ * 
+ * @param dbname 
+ * @param number 
+ * @return std::string 
+ */
 std::string SSTTableFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   return MakeFileName(dbname, number, "sst");
@@ -55,10 +92,12 @@ std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   return dbname + buf;
 }
 
+/// dbname/CURRENT
 std::string CurrentFileName(const std::string& dbname) {
   return dbname + "/CURRENT";
 }
 
+/// dbname/LOCK
 std::string LockFileName(const std::string& dbname) { return dbname + "/LOCK"; }
 
 /**
