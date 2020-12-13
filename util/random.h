@@ -23,6 +23,7 @@ class Random {
       seed_ = 1;
     }
   }
+  /// 返回下一个随机数
   uint32_t Next() {
     static const uint32_t M = 2147483647L;  // 2^31-1
     static const uint64_t A = 16807;        // bits 14, 8, 7, 5, 2, 1, 0
