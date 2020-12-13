@@ -6,18 +6,41 @@
 
 namespace leveldb {
 
+/**
+ * @brief PutFixed32
+ * 
+ * 在dst末尾附加value按照小端编码后的固定4个字节
+ * 
+ * @param dst 
+ * @param value 
+ */
 void PutFixed32(std::string* dst, uint32_t value) {
   char buf[sizeof(value)];
   EncodeFixed32(buf, value);
   dst->append(buf, sizeof(buf));
 }
 
+/**
+ * @brief PutFixed64
+ * 
+ * 在dst末尾附加value按照小端编码后的固定8个字节
+ * 
+ * @param dst 
+ * @param value 
+ */
 void PutFixed64(std::string* dst, uint64_t value) {
   char buf[sizeof(value)];
   EncodeFixed64(buf, value);
   dst->append(buf, sizeof(buf));
 }
 
+/**
+ * @brief EncodeVarint32
+ * 
+ * @param dst 
+ * @param v 
+ * @return char* 编码的Varint32数据的下一地址
+ */
 char* EncodeVarint32(char* dst, uint32_t v) {
   // Operate on characters as unsigneds
   uint8_t* ptr = reinterpret_cast<uint8_t*>(dst);
@@ -46,12 +69,27 @@ char* EncodeVarint32(char* dst, uint32_t v) {
   return reinterpret_cast<char*>(ptr);
 }
 
+/**
+ * @brief PutVarint32
+ * 
+ * 将uint32_t编码成Varint32，附加到dst尾部
+ * 
+ * @param dst 
+ * @param v 
+ */
 void PutVarint32(std::string* dst, uint32_t v) {
   char buf[5];
   char* ptr = EncodeVarint32(buf, v);
   dst->append(buf, ptr - buf);
 }
 
+/**
+ * @brief EncodeVarint64
+ * 
+ * @param dst 
+ * @param v 
+ * @return char* 
+ */
 char* EncodeVarint64(char* dst, uint64_t v) {
   static const int B = 128;
   uint8_t* ptr = reinterpret_cast<uint8_t*>(dst);
@@ -63,6 +101,12 @@ char* EncodeVarint64(char* dst, uint64_t v) {
   return reinterpret_cast<char*>(ptr);
 }
 
+/**
+ * @brief PutVarint64
+ * 
+ * @param dst 
+ * @param v 
+ */
 void PutVarint64(std::string* dst, uint64_t v) {
   char buf[10];
   char* ptr = EncodeVarint64(buf, v);
@@ -70,7 +114,7 @@ void PutVarint64(std::string* dst, uint64_t v) {
 }
 
 /**
- * @brief 先添加长度，再添加数据
+ * @brief 先添加长度，再添加Slice数据
  * 
  * 长度：Varint32
  * 
@@ -83,7 +127,7 @@ void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
 }
 
 /**
- * @brief 计算Varint64编码需要的字节数
+ * @brief 计算v通过Varint64编码需要的字节数
  * 
  * @param v 
  * @return int 
@@ -97,6 +141,14 @@ int VarintLength(uint64_t v) {
   return len;
 }
 
+/**
+ * @brief GetVarint32PtrFallback
+ * 
+ * @param p 
+ * @param limit 
+ * @param value 
+ * @return const char*  跳过解码的数据，如果解码超过limit或者不合法，返回nullptr
+ */
 const char* GetVarint32PtrFallback(const char* p, const char* limit,
                                    uint32_t* value) {
   uint32_t result = 0;
@@ -115,6 +167,14 @@ const char* GetVarint32PtrFallback(const char* p, const char* limit,
   return nullptr;
 }
 
+/**
+ * @brief GetVarint32
+ * 
+ * @param input 
+ * @param value 
+ * @return true 
+ * @return false 
+ */
 bool GetVarint32(Slice* input, uint32_t* value) {
   const char* p = input->data();
   const char* limit = p + input->size();
@@ -127,6 +187,16 @@ bool GetVarint32(Slice* input, uint32_t* value) {
   }
 }
 
+/**
+ * @brief GetVarint64Ptr
+ * 
+ * Ptr的意思是指，原始数据是通过char*指针传入的
+ * 
+ * @param p 
+ * @param limit 
+ * @param value 
+ * @return const char* 
+ */
 const char* GetVarint64Ptr(const char* p, const char* limit, uint64_t* value) {
   uint64_t result = 0;
   for (uint32_t shift = 0; shift <= 63 && p < limit; shift += 7) {
@@ -166,6 +236,14 @@ bool GetVarint64(Slice* input, uint64_t* value) {
   }
 }
 
+/**
+ * @brief GetLengthPrefixedSlice
+ * 
+ * @param p 
+ * @param limit 
+ * @param result 
+ * @return const char* 
+ */
 const char* GetLengthPrefixedSlice(const char* p, const char* limit,
                                    Slice* result) {
   uint32_t len;

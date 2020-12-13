@@ -46,6 +46,9 @@ class BloomFilterPolicy : public FilterPolicy {
   /**
    * @brief Create a Filter object
    * 
+   * 将keys中的所有key通过多个hash函数得到多个hash值，将数组对应的位置置为1，
+   * dst带回这个bit数组的数据
+   * 
    * @param keys 
    * @param n 
    * @param dst 

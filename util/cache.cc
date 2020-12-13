@@ -16,7 +16,7 @@
 /**
  * @file cache.cc
  * 
- * Table Cache 实现
+ * ShardedLRUCache（分片cache） 实现
  * 
  */
 
